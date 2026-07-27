@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+}
+
+enum SessionMode {
+  FREE
+  POMODORO
+}
+
+model Subject {
+  id      String @id
+  code    String
+  name    String
+  hours   Int
+  teacher String
+  color   String
+  topics  String[]
+
+  tasks    Task[]
+  sessions StudySession[]
+  posts    JournalPost[]
+
+  createdAt DateTime @default(now())
+}
+
+model Task {
+  id          String       @id @default(cuid())
+  title       String
+  topic       String?
+  priority    TaskPriority @default(MEDIUM)
+  status      TaskStatus   @default(PENDING)
+  xp          Int          @default(10)
+  completedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subjectId String
+
+  @@index([subjectId])
+}
+
+model StudySession {
+  id              String      @id @default(cuid())
+  mode            SessionMode @default(FREE)
+  startedAt       DateTime
+  endedAt         DateTime
+  durationMinutes Int
+  xpEarned        Int
+  createdAt       DateTime    @default(now())
+
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subjectId String
+
+  @@index([subjectId])
+}
+
+model JournalPost {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  excerpt     String?
+  content     String
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  subjectId String?
+
+  @@index([subjectId])
+}
+
+model CharacterState {
+  id        Int      @id @default(1)
+  totalXp   Int      @default(0)
+  updatedAt DateTime @updatedAt
+}

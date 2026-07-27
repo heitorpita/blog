@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: studyfolio
+      POSTGRES_PASSWORD: studyfolio
+      POSTGRES_DB: studyfolio
+    ports:
+      - "5433:5432"
+    volumes:
+      - studyfolio_dev_db:/var/lib/postgresql
+
+volumes:
+  studyfolio_dev_db:
