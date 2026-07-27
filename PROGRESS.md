@@ -6,10 +6,9 @@
 
 - [x] 1. Dashboard → Grafo de conexões ✅ **concluída**
 - [x] 2. Matérias → CRUD de matérias + tópicos com checkbox ✅ **concluída**
-- [ ] 3. Cérebro → renomear + XP turbinado
+- [x] 3. Cérebro → renomear + XP turbinado ✅ **concluída**
 
-**Próximo passo: tarefa 3 (Cérebro).** O ledger `XpEvent` já existe, então gráfico no tempo,
-heatmap, breakdown por matéria e feed de eventos são consultas diretas — sem schema novo.
+**As três tarefas estão concluídas.** Nada pendente.
 
 > **O app se chama Sinapse** (era Studyfolio). A pasta do repositório ainda se chama
 > `studyfolio/` — renomear é opcional e não afeta nada.
@@ -145,15 +144,50 @@ Alterados: `prisma/schema.prisma`, `prisma/seed.ts` (idempotente, não apaga tó
 
 ---
 
-## 3. Cérebro
+## 3. Cérebro — CONCLUÍDA
 
-- Renomeação feita em: nada ainda.
-- Features de XP implementadas: [ ] títulos por nível [ ] streak [ ] gráfico XP no tempo
-  [ ] heatmap [ ] breakdown por matéria [ ] histórico de eventos [ ] animação level up
-- **A fundação já existe:** o ledger `XpEvent` foi criado na tarefa 2. Os itens de gráfico no
-  tempo, heatmap, breakdown por matéria e feed de eventos agora são consultas diretas nele —
-  não precisam de schema novo. Só o bônus de streak precisa gravar (`source: "STREAK"`).
-- Próximo passo (quando chegar a vez): renomear Personagem → Cérebro e consumir o ledger.
+- Renomeação feita em: rota `/character` → `/brain`, `components/character/` →
+  `components/brain/`, `lib/character.ts` → `lib/xp-ledger.ts` (o conceito de "personagem"
+  sumiu), item da sidebar, metadata do layout. Não sobrou referência a "Personagem".
+- Features: [x] títulos por nível [x] streak [x] gráfico XP no tempo [x] heatmap
+  [x] breakdown por matéria [x] histórico de eventos [x] animação level up [x] % explícita
+- Sem migration: tudo saiu de consultas ao ledger `XpEvent` criado na tarefa 2.
+
+### Cena 3D
+
+O icosaedro com anéis virou uma **rede neural**: neurônios distribuídos por espiral de Fibonacci
+numa esfera, ligados aos vizinhos mais próximos. O nível aumenta neurônios *e* conexões por
+neurônio, então a rede fica visivelmente mais densa. No level up ela pulsa, brilha e solta mais
+partículas por 4s — disparado comparando o nível com o do render anterior via `useRef`, para o
+primeiro render nunca contar como subida.
+
+### Bônus de streak sem campo novo no schema
+
+O próprio evento é o registro de "já ganhou": a descrição carrega o marco (`Streak de 7 dias`),
+e `awardStreakMilestone` só grava se não existir evento igual. Testado: concede uma vez, e a
+segunda sessão no mesmo dia não duplica.
+
+### Fuso horário — bug que teria passado despercebido
+
+Datas no banco são UTC. Estudar às 22h em Brasília é 01h UTC do dia seguinte, o que quebraria o
+streak, o heatmap e a curva de XP. `lib/time.ts` centraliza o dia local (`APP_TIMEZONE`, padrão
+`America/Sao_Paulo`) e `lib/graph.ts` também passou a usá-lo.
+
+Junto disso, `getStreak` **ignora dias no futuro**: um relógio adiantado gravaria uma sessão "de
+amanhã" e o streak zeraria sem motivo (aconteceu de verdade com os dados de demonstração).
+
+### Decisões de visualização
+
+- **Breakdown por matéria em barras horizontais, não pizza** — comparar comprimento é mais
+  preciso que ângulo. A largura é proporcional ao **total** (não ao maior), para o comprimento
+  bater com a porcentagem escrita. As cores das matérias são escolhidas pelo usuário e não
+  passam nas checagens de daltonismo, então nome, XP e % estão sempre escritos: a identidade
+  nunca depende da cor.
+- **Heatmap** usa rampa sequencial de um hue só (azul, passos 600→300 da escala de referência),
+  escuro → claro. O passo mais baixo fica abaixo de 3:1 contra a superfície de propósito ("quase
+  zero"), com legenda e tooltip por célula compensando.
+- **Curva de XP** é série única: sem legenda (o título já a nomeia), cor de destaque do app
+  (`#7c9dff`, validada em contraste ≥3:1).
 
 ---
 
@@ -196,3 +230,7 @@ depois exigiria duas migrations. `CharacterState` é removido: `totalXp` passa a
   falha com "does not satisfy the constraint AppRouteHandlerRoutes" (tipos ainda não gerados).
 - Evite dois botões com o mesmo rótulo na mesma página ("Adicionar" × 2 quebrou teste e leitor de
   tela); hoje são "Adicionar tópico" e "Adicionar tarefa".
+- **Datas: sempre use `lib/time.ts`**, nunca `toISOString().slice(0,10)` — este último usa UTC e
+  erra o dia para quem estuda à noite.
+- O app é dark-only (`globals.css` fixa `color-scheme: dark`), então paletas de gráfico só
+  precisam ser validadas contra a superfície escura `#16161d`.

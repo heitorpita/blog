@@ -1,15 +1,12 @@
 import { prisma } from "@/lib/db";
 import { linkKey } from "@/lib/wikilinks";
+import { dayKey } from "@/lib/time";
 import type { GraphData, GraphEdge, GraphNode } from "@/lib/graph-types";
 
 export type { GraphData, GraphEdge, GraphNode, GraphNodeType } from "@/lib/graph-types";
 export { NODE_TYPE_LABEL } from "@/lib/graph-types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-function dayKey(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
 
 export async function buildGraph(): Promise<GraphData> {
   const since = new Date(Date.now() - DAY_MS);
@@ -129,7 +126,7 @@ export async function buildGraph(): Promise<GraphData> {
     nodes.push({
       id: studyNodeId,
       type: "STUDY",
-      label: new Date(`${bucket.day}T12:00:00`).toLocaleDateString("pt-BR", {
+      label: new Date(`${bucket.day}T12:00:00Z`).toLocaleDateString("pt-BR", {
         day: "2-digit",
         month: "short",
       }),

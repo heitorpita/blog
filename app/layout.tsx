@@ -14,7 +14,7 @@ const fraunces = Fraunces({
 
 export const metadata: Metadata = {
   title: "Sinapse",
-  description: "Gestão de estudos com progressão de personagem",
+  description: "Gestão de estudos com um segundo cérebro conectado",
 };
 
 export default function RootLayout({

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { recordXp, revokeXp } from "@/lib/character";
+import { recordXp, revokeXp } from "@/lib/xp-ledger";
 
 const updateTaskSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),

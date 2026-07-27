@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { KnowledgeGraph } from "@/components/graph/knowledge-graph";
-import { getTotalXp } from "@/lib/character";
+import { getTotalXp } from "@/lib/xp-ledger";
 import { buildGraph } from "@/lib/graph";
 import { xpProgress } from "@/lib/xp";
 import { formatMinutes } from "@/lib/format";

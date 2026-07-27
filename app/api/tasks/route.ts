@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { recordXp } from "@/lib/character";
+import { recordXp } from "@/lib/xp-ledger";
 
 const createTaskSchema = z.object({
   title: z.string().trim().min(1).max(200),

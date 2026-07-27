@@ -1,8 +1,9 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { recordXp } from "@/lib/character";
-import { xpForStudyMinutes } from "@/lib/xp";
+import { awardStreakMilestone, recordXp } from "@/lib/xp-ledger";
+import { getStreak } from "@/lib/brain";
+import { STREAK_MILESTONES, streakBonusXp, xpForStudyMinutes } from "@/lib/xp";
 
 const createSessionSchema = z.object({
   subjectId: z.string().trim().min(1),
@@ -47,5 +48,15 @@ export async function POST(request: NextRequest) {
     sessionId: session.id,
   });
 
-  return Response.json(session, { status: 201 });
+  // A sessão pode ter acabado de fechar um marco de streak.
+  const { current } = await getStreak();
+  const milestone = STREAK_MILESTONES.find((days) => days === current);
+  const streakBonus = milestone
+    ? await awardStreakMilestone(milestone, streakBonusXp(milestone))
+    : null;
+
+  return Response.json(
+    { ...session, streak: current, streakBonus: streakBonus?.amount ?? null },
+    { status: 201 },
+  );
 }

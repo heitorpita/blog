@@ -24,11 +24,25 @@ export async function revokeXp(where: { taskId?: string; topicId?: string }) {
   return prisma.xpEvent.deleteMany({ where });
 }
 
+/**
+ * Concede o bônus de um marco de streak, se ainda não foi concedido.
+ * O próprio evento é o registro de "já ganhou": a descrição carrega o marco,
+ * então não precisa de campo extra no schema para evitar duplicata.
+ */
+export async function awardStreakMilestone(days: number, amount: number) {
+  const description = `Streak de ${days} dias`;
+
+  const already = await prisma.xpEvent.findFirst({
+    where: { source: "STREAK", description },
+    select: { id: true },
+  });
+
+  if (already) return null;
+
+  return recordXp({ source: "STREAK", amount, description });
+}
+
 export async function getTotalXp() {
   const { _sum } = await prisma.xpEvent.aggregate({ _sum: { amount: true } });
   return _sum.amount ?? 0;
-}
-
-export async function getCharacter() {
-  return { totalXp: await getTotalXp() };
 }

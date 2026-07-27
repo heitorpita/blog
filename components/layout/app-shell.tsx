@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
-import { CharacterPanel } from "@/components/character/character-panel";
+import { BrainPanel } from "@/components/brain/brain-panel";
 import { LogoutButton } from "@/components/auth/logout-button";
-import { getTotalXp } from "@/lib/character";
+import { getTotalXp } from "@/lib/xp-ledger";
+import { getStreak } from "@/lib/brain";
 
 export async function AppShell({ children }: { children: React.ReactNode }) {
-  const totalXp = await getTotalXp();
+  const [totalXp, streak] = await Promise.all([getTotalXp(), getStreak()]);
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
@@ -30,7 +31,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           <div className="mx-auto max-w-5xl px-5 py-8 md:px-10">{children}</div>
         </main>
 
-        <CharacterPanel totalXp={totalXp} />
+        <BrainPanel totalXp={totalXp} streak={streak.current} />
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { recordXp, revokeXp } from "@/lib/character";
+import { recordXp, revokeXp } from "@/lib/xp-ledger";
 import { TOPIC_COMPLETION_XP } from "@/lib/xp";
 
 const updateTopicSchema = z.object({

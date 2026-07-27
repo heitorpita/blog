@@ -16,7 +16,10 @@ React Three Fiber · Recharts.
   prioridade, status e XP.
 - **Cronômetro** — modo livre e Pomodoro configurável, vinculado a uma matéria; converte tempo em XP.
 - **Jornada** — diário em Markdown com sidebar de navegação, sumário automático e editor com prévia.
-- **Personagem** — cena 3D que evolui de cor e ganha anéis/partículas a cada nível.
+- **Cérebro** — rede neural 3D que ganha neurônios e sinapses a cada nível, com animação na
+  subida. Títulos por faixa (Iniciante → Aprendiz → Estudioso → Mestre), streak de dias
+  consecutivos com bônus em marcos, curva de XP acumulado, heatmap de dias estudados,
+  breakdown de XP por matéria e feed de atividade.
 
 ## Acesso
 
@@ -36,7 +39,9 @@ Definidas em [lib/xp.ts](lib/xp.ts):
 - Tarefa: 10 XP (rápida), 20 XP (padrão) ou 30 XP (revisão de tópico).
 - Tópico da ementa marcado como estudado: 30 XP.
 - Estudo: 1 XP por minuto.
+- Bônus de streak: 5 XP por dia do marco (7, 30 e 100 dias), concedido uma única vez.
 - Nível: `⌊√(XP / 100)⌋` — nível 1 aos 100 XP, nível 2 aos 400, nível 3 aos 900.
+- Faixas de título em `LEVEL_TITLES`, editável.
 
 Desmarcar ou excluir uma tarefa/tópico devolve o XP. O total vem de `SUM(XpEvent.amount)` — não
 existe contador separado que possa divergir das linhas de origem.
@@ -105,6 +110,12 @@ aparecem como nós "sem destino", clicáveis para criar o post.
 
 O tamanho do nó cresce com o número de conexões; nós com atividade nas últimas 24h pulsam.
 
+## Fuso horário
+
+"Dias estudados" (streak, heatmap, curva de XP) usam o fuso de `APP_TIMEZONE`
+(padrão `America/Sao_Paulo`), não UTC — senão estudar às 22h contaria como o dia seguinte.
+Ver [lib/time.ts](lib/time.ts).
+
 ## Deploy (Coolify)
 
 A imagem é multi-stage e usa o output `standalone` do Next. O CLI do Prisma vive num diretório
@@ -119,6 +130,8 @@ roda `prisma migrate deploy` antes de subir o servidor.
    DATABASE_URL=<connection string interna do Postgres>
    APP_PASSWORD=<a senha de acesso ao app>
    NODE_ENV=production
+   # opcional, padrão America/Sao_Paulo
+   APP_TIMEZONE=America/Sao_Paulo
    ```
    Nenhuma delas é build variable — o build não toca no banco nem na senha.
 4. Garanta que a aplicação esteja na mesma rede Docker do Postgres.

@@ -9,7 +9,7 @@ const NAV_ITEMS = [
   { href: "/subjects", label: "Matérias" },
   { href: "/timer", label: "Cronômetro" },
   { href: "/journal", label: "Jornada" },
-  { href: "/character", label: "Personagem" },
+  { href: "/brain", label: "Cérebro" },
 ];
 
 export function SidebarNav() {
