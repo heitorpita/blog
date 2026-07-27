@@ -8,6 +8,9 @@ export const TASK_XP_PRESETS = {
   topicReview: 30,
 } as const;
 
+/** XP por marcar um tópico da ementa como estudado. */
+export const TOPIC_COMPLETION_XP = 30;
+
 export function levelForXp(totalXp: number): number {
   return Math.floor(Math.sqrt(Math.max(totalXp, 0) / XP_PER_LEVEL_UNIT));
 }

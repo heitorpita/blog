@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { addXp } from "@/lib/character";
+import { recordXp } from "@/lib/character";
 
 const createTaskSchema = z.object({
   title: z.string().trim().min(1).max(200),
   subjectId: z.string().trim().min(1),
-  topic: z.string().trim().min(1).max(200).nullish(),
+  topicId: z.string().trim().min(1).nullish(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]).default("MEDIUM"),
   status: z.enum(["PENDING", "IN_PROGRESS", "DONE"]).default("PENDING"),
   xp: z.number().int().min(0).max(1000).default(10),
@@ -43,7 +43,13 @@ export async function POST(request: NextRequest) {
   });
 
   if (completed) {
-    await addXp(xp);
+    await recordXp({
+      source: "TASK",
+      amount: xp,
+      description: `Tarefa concluída: ${task.title}`,
+      subjectId: task.subjectId,
+      taskId: task.id,
+    });
   }
 
   return Response.json(task, { status: 201 });

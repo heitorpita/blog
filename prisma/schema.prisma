@@ -24,6 +24,14 @@ enum SessionMode {
   POMODORO
 }
 
+enum XpSource {
+  TASK
+  TOPIC
+  SESSION
+  STREAK
+  ADJUSTMENT
+}
+
 model Subject {
   id      String @id
   code    String
@@ -31,19 +39,36 @@ model Subject {
   hours   Int
   teacher String
   color   String
-  topics  String[]
 
+  topics   Topic[]
   tasks    Task[]
   sessions StudySession[]
   posts    JournalPost[]
+  xpEvents XpEvent[]
 
   createdAt DateTime @default(now())
+}
+
+model Topic {
+  id          String    @id @default(cuid())
+  title       String
+  order       Int       @default(0)
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subjectId String
+
+  tasks    Task[]
+  xpEvents XpEvent[]
+
+  @@index([subjectId])
 }
 
 model Task {
   id          String       @id @default(cuid())
   title       String
-  topic       String?
   priority    TaskPriority @default(MEDIUM)
   status      TaskStatus   @default(PENDING)
   xp          Int          @default(10)
@@ -54,7 +79,13 @@ model Task {
   subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   subjectId String
 
+  topic   Topic?  @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  topicId String?
+
+  xpEvents XpEvent[]
+
   @@index([subjectId])
+  @@index([topicId])
 }
 
 model StudySession {
@@ -69,7 +100,10 @@ model StudySession {
   subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   subjectId String
 
+  xpEvents XpEvent[]
+
   @@index([subjectId])
+  @@index([endedAt])
 }
 
 model JournalPost {
@@ -88,8 +122,29 @@ model JournalPost {
   @@index([subjectId])
 }
 
-model CharacterState {
-  id        Int      @id @default(1)
-  totalXp   Int      @default(0)
-  updatedAt DateTime @updatedAt
+// Ledger de XP: fonte única de verdade. O XP total é SUM(amount), então não
+// existe contador separado que possa divergir das linhas de origem.
+// Estornar XP (desmarcar tarefa/tópico) apaga o evento em vez de gravar um
+// evento negativo, para o feed não encher de ruído.
+model XpEvent {
+  id          String   @id @default(cuid())
+  source      XpSource
+  amount      Int
+  description String
+  createdAt   DateTime @default(now())
+
+  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subjectId String?
+
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId String?
+
+  topic   Topic?  @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  topicId String?
+
+  session   StudySession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId String?
+
+  @@index([createdAt])
+  @@index([subjectId])
 }

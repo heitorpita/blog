@@ -10,7 +10,7 @@ import { TASK_XP_PRESETS } from "@/lib/xp";
 export type TaskItem = {
   id: string;
   title: string;
-  topic: string | null;
+  topicId: string | null;
   priority: "LOW" | "MEDIUM" | "HIGH";
   status: "PENDING" | "IN_PROGRESS" | "DONE";
   xp: number;
@@ -32,14 +32,14 @@ export function TaskManager({
   accentColor,
 }: {
   subjectId: string;
-  topics: string[];
+  topics: { id: string; title: string }[];
   tasks: TaskItem[];
   accentColor: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [title, setTitle] = useState("");
-  const [topic, setTopic] = useState("");
+  const [topicId, setTopicId] = useState("");
   const [priority, setPriority] = useState<TaskItem["priority"]>("MEDIUM");
   const [xp, setXp] = useState<number>(TASK_XP_PRESETS.quick);
   const [xpToast, setXpToast] = useState<number | null>(null);
@@ -58,14 +58,14 @@ export function TaskManager({
       body: JSON.stringify({
         title,
         subjectId,
-        topic: topic || null,
+        topicId: topicId || null,
         priority,
         xp,
       }),
     });
 
     setTitle("");
-    setTopic("");
+    setTopicId("");
     refresh();
   }
 
@@ -114,19 +114,19 @@ export function TaskManager({
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted focus:border-accent"
         />
         <Button type="submit" disabled={isPending || !title.trim()}>
-          Adicionar
+          Adicionar tarefa
         </Button>
 
         <div className="grid gap-3 sm:col-span-2 sm:grid-cols-3">
           <select
-            value={topic}
-            onChange={(event) => setTopic(event.target.value)}
+            value={topicId}
+            onChange={(event) => setTopicId(event.target.value)}
             className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
           >
             <option value="">Sem tópico</option>
             {topics.map((item) => (
-              <option key={item} value={item}>
-                {item}
+              <option key={item.id} value={item.id}>
+                {item.title}
               </option>
             ))}
           </select>
@@ -193,7 +193,11 @@ export function TaskManager({
               >
                 {task.title}
               </p>
-              {task.topic && <p className="truncate text-xs text-muted">{task.topic}</p>}
+              {task.topicId && (
+                <p className="truncate text-xs text-muted">
+                  {topics.find((item) => item.id === task.topicId)?.title}
+                </p>
+              )}
             </div>
 
             <Badge tone={PRIORITY_TONE[task.priority]}>{PRIORITY_LABEL[task.priority]}</Badge>

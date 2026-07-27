@@ -1,11 +1,11 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { addXp } from "@/lib/character";
+import { recordXp, revokeXp } from "@/lib/character";
 
 const updateTaskSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
-  topic: z.string().trim().min(1).max(200).nullish(),
+  topicId: z.string().trim().min(1).nullish(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
   status: z.enum(["PENDING", "IN_PROGRESS", "DONE"]).optional(),
   xp: z.number().int().min(0).max(1000).optional(),
@@ -38,9 +38,15 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/tasks/
   });
 
   if (!wasDone && isDone) {
-    await addXp(task.xp);
+    await recordXp({
+      source: "TASK",
+      amount: task.xp,
+      description: `Tarefa concluída: ${task.title}`,
+      subjectId: task.subjectId,
+      taskId: task.id,
+    });
   } else if (wasDone && !isDone) {
-    await addXp(-existing.xp);
+    await revokeXp({ taskId: task.id });
   }
 
   return Response.json(task);
@@ -54,11 +60,8 @@ export async function DELETE(_request: NextRequest, ctx: RouteContext<"/api/task
     return Response.json({ error: "Tarefa não encontrada" }, { status: 404 });
   }
 
+  // Os eventos de XP da tarefa saem junto via ON DELETE CASCADE.
   await prisma.task.delete({ where: { id } });
-
-  if (existing.status === "DONE") {
-    await addXp(-existing.xp);
-  }
 
   return new Response(null, { status: 204 });
 }

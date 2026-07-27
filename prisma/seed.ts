@@ -3,28 +3,31 @@ import { subjects } from "../data/subjects";
 import { prisma } from "../lib/db";
 
 async function main() {
-  for (const subject of subjects) {
+  for (const { topics, ...subject } of subjects) {
     await prisma.subject.upsert({
       where: { id: subject.id },
-      update: {
-        code: subject.code,
-        name: subject.name,
-        hours: subject.hours,
-        teacher: subject.teacher,
-        color: subject.color,
-        topics: subject.topics,
-      },
+      update: subject,
       create: subject,
     });
+
+    // Só cria os tópicos que ainda não existem, para o seed poder rodar de novo
+    // sem duplicar nem apagar o que já foi marcado como estudado.
+    const existing = await prisma.topic.findMany({
+      where: { subjectId: subject.id },
+      select: { title: true },
+    });
+    const known = new Set(existing.map((topic) => topic.title));
+
+    const missing = topics
+      .map((title, index) => ({ title, order: index, subjectId: subject.id }))
+      .filter((topic) => !known.has(topic.title));
+
+    if (missing.length > 0) {
+      await prisma.topic.createMany({ data: missing });
+    }
   }
 
-  await prisma.characterState.upsert({
-    where: { id: 1 },
-    update: {},
-    create: { id: 1, totalXp: 0 },
-  });
-
-  console.log(`Seeded ${subjects.length} subjects and character state.`);
+  console.log(`Seed concluído: ${subjects.length} matérias e seus tópicos.`);
 }
 
 main()

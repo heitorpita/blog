@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { addXp } from "@/lib/character";
+import { recordXp } from "@/lib/character";
 import { xpForStudyMinutes } from "@/lib/xp";
 
 const createSessionSchema = z.object({
@@ -39,7 +39,13 @@ export async function POST(request: NextRequest) {
     data: { subjectId, mode, durationMinutes, startedAt: start, endedAt, xpEarned },
   });
 
-  await addXp(xpEarned);
+  await recordXp({
+    source: "SESSION",
+    amount: xpEarned,
+    description: `Sessão de estudo: ${durationMinutes} min`,
+    subjectId: session.subjectId,
+    sessionId: session.id,
+  });
 
   return Response.json(session, { status: 201 });
 }

@@ -1,15 +1,11 @@
 import Link from "next/link";
-import { prisma } from "@/lib/db";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { CharacterPanel } from "@/components/character/character-panel";
 import { LogoutButton } from "@/components/auth/logout-button";
+import { getTotalXp } from "@/lib/character";
 
 export async function AppShell({ children }: { children: React.ReactNode }) {
-  const character = await prisma.characterState.upsert({
-    where: { id: 1 },
-    update: {},
-    create: { id: 1, totalXp: 0 },
-  });
+  const totalXp = await getTotalXp();
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
@@ -34,7 +30,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           <div className="mx-auto max-w-5xl px-5 py-8 md:px-10">{children}</div>
         </main>
 
-        <CharacterPanel totalXp={character.totalXp} />
+        <CharacterPanel totalXp={totalXp} />
       </div>
     </div>
   );
