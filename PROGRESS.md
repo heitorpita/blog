@@ -1,15 +1,18 @@
-# Progresso — Melhorias Studyfolio
+# Progresso — Melhorias Sinapse
 
 > Leia este arquivo antes de começar qualquer tarefa. Ele é atualizado a cada etapa concluída.
 
 ## Status geral
 
-- [ ] 1. Dashboard → Grafo de conexões
+- [x] 1. Dashboard → Grafo de conexões ✅ **concluída**
 - [x] 2. Matérias → CRUD de matérias + tópicos com checkbox ✅ **concluída**
 - [ ] 3. Cérebro → renomear + XP turbinado
 
-**Próximo passo: tarefa 1 (grafo).** A fundação do ledger de XP já está pronta, o que adianta
-boa parte da tarefa 3 também.
+**Próximo passo: tarefa 3 (Cérebro).** O ledger `XpEvent` já existe, então gráfico no tempo,
+heatmap, breakdown por matéria e feed de eventos são consultas diretas — sem schema novo.
+
+> **O app se chama Sinapse** (era Studyfolio). A pasta do repositório ainda se chama
+> `studyfolio/` — renomear é opcional e não afeta nada.
 
 ---
 
@@ -47,12 +50,36 @@ sessão, que afogam a estrutura que interessa (matéria → tópico → tarefa �
 
 ---
 
-## 1. Dashboard (grafo)
+## 1. Dashboard (grafo) — CONCLUÍDA
 
-- Decisão tomada: **pendente** — ver "Decisões abertas".
-- Biblioteca escolhida: **`react-force-graph-2d`** (proposta, ver justificativa abaixo).
-- Arquivos criados/alterados: nenhum ainda.
-- Próximo passo: fechar as decisões abertas e implementar.
+- Decisão tomada: **as duas opções (A + B)**. A estrutura vem das FKs (opção A) e os backlinks
+  `[[Título]]` do diário enriquecem (opção B).
+- Biblioteca escolhida: **`react-force-graph-2d`** (justificativa abaixo).
+- Migration: `20260727190000_journal_links` (tabela `JournalLink`).
+- Arquivos criados: `lib/graph.ts` (monta o grafo), `lib/graph-types.ts`,
+  `lib/wikilinks.ts` (parser de `[[...]]`), `components/graph/knowledge-graph.tsx`.
+- Alterados: `app/(app)/dashboard/page.tsx`, `app/api/journal/route.ts`,
+  `app/api/journal/[slug]/route.ts`, `prisma/schema.prisma`.
+
+### Como os backlinks resolvem
+
+`JournalLink` guarda **só o texto** do alvo, sem FK. A resolução (post? matéria? tópico?) acontece
+ao montar o grafo, contra os dados atuais. Assim um link nunca fica apontando para um título que
+já mudou, e menções a algo inexistente viram nós "sem destino" clicáveis — igual ao Obsidian.
+Editar um post reescreve seus links do zero (mais simples e confiável que casar diffs).
+
+### Armadilha que custou um build quebrado
+
+O componente do grafo é client component. Importar `NODE_TYPE_LABEL` de `lib/graph.ts` (que
+importa o Prisma) arrastou o driver `pg` → módulo `dns` do Node para o bundle do navegador:
+**"Module not found: Can't resolve 'dns'"**. Nem `tsc` nem o ESLint pegam isso — só apareceu ao
+abrir a página. Por isso tipos e constantes do grafo moram em `lib/graph-types.ts`, sem
+dependência de banco. **Regra: client component nunca importa de módulo que toca o Prisma.**
+
+### Outro ajuste necessário
+
+Sem `zoomToFit` no `onEngineStop`, a simulação assenta maior que o canvas e clusters inteiros
+somem nas bordas. O `ref` funciona normalmente através do `next/dynamic`.
 
 ### Por que 2D e não 3D
 

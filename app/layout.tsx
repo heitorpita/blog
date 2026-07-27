@@ -13,7 +13,7 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Studyfolio",
+  title: "Sinapse",
   description: "Gestão de estudos com progressão de personagem",
 };
 

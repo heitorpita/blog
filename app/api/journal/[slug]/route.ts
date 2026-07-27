@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { parseWikiLinks } from "@/lib/wikilinks";
 
 const updatePostSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
@@ -30,7 +31,17 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/journa
 
   const post = await prisma.journalPost.update({
     where: { slug },
-    data: parsed.data,
+    data: {
+      ...parsed.data,
+      // Editar o conteúdo reescreve os backlinks do zero: é mais simples e
+      // confiável que tentar casar quais mudaram.
+      ...(parsed.data.content !== undefined && {
+        links: {
+          deleteMany: {},
+          create: parseWikiLinks(parsed.data.content).map((target) => ({ target })),
+        },
+      }),
+    },
   });
 
   return Response.json(post);

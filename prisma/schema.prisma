@@ -119,7 +119,24 @@ model JournalPost {
   subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
   subjectId String?
 
+  links JournalLink[]
+
   @@index([subjectId])
+}
+
+// Backlink estilo Obsidian: cada `[[Alvo]]` no markdown de um post vira uma linha.
+// Guarda só o texto do alvo, sem FK — a resolução (post? matéria? tópico?) acontece
+// na hora de montar o grafo, contra os dados atuais. Assim um link nunca fica
+// apontando para um título que já mudou, e links para algo que ainda não existe
+// continuam visíveis como "não resolvidos", igual ao Obsidian.
+model JournalLink {
+  id     String @id @default(cuid())
+  target String
+
+  fromPost   JournalPost @relation(fields: [fromPostId], references: [id], onDelete: Cascade)
+  fromPostId String
+
+  @@index([fromPostId])
 }
 
 // Ledger de XP: fonte única de verdade. O XP total é SUM(amount), então não

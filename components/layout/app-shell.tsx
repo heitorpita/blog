@@ -11,13 +11,13 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen flex-col md:flex-row">
       <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 md:hidden">
         <Link href="/dashboard" className="font-serif text-lg text-foreground">
-          Studyfolio
+          Sinapse
         </Link>
       </header>
 
       <aside className="hidden w-60 shrink-0 flex-col gap-6 border-r border-border bg-surface p-5 md:flex">
         <Link href="/dashboard" className="font-serif text-xl text-foreground">
-          Studyfolio
+          Sinapse
         </Link>
         <SidebarNav />
         <div className="mt-auto flex flex-col">

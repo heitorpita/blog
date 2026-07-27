@@ -1,15 +1,19 @@
-# Studyfolio
+# Sinapse
 
-Site pessoal de gestão de estudos: documentação estilo GitBook combinada com progressão de
-personagem em 3D. Cada tarefa concluída e cada minuto estudado viram XP.
+Site pessoal de gestão de estudos: um "segundo cérebro" onde matérias, tópicos, tarefas e
+anotações formam um grafo de conexões, combinado com progressão de personagem em 3D. Cada tarefa
+concluída, tópico estudado e minuto de estudo viram XP.
 
 Stack: Next.js 16 (App Router) · TypeScript · Tailwind CSS 4 · Prisma 7 + PostgreSQL ·
 React Three Fiber · Recharts.
 
 ## Funcionalidades
 
-- **Dashboard** — XP total, nível, horas estudadas na semana, progresso por matéria e próximas tarefas.
-- **Matérias** — tópicos da ementa e CRUD de tarefas com prioridade, status e XP.
+- **Dashboard** — grafo interativo estilo Obsidian ligando matérias, tópicos, tarefas, sessões e
+  posts. Zoom, arrastar nós, filtro por matéria e painel de detalhes. Acima dele, um resumo
+  compacto com nível, estudo na semana e próxima tarefa.
+- **Matérias** — CRUD de matérias, checklist de tópicos da ementa (30 XP cada) e tarefas com
+  prioridade, status e XP.
 - **Cronômetro** — modo livre e Pomodoro configurável, vinculado a uma matéria; converte tempo em XP.
 - **Jornada** — diário em Markdown com sidebar de navegação, sumário automático e editor com prévia.
 - **Personagem** — cena 3D que evolui de cor e ganha anéis/partículas a cada nível.
@@ -30,10 +34,12 @@ ficar aberto. Em desenvolvimento, sem a env var o login é dispensado.
 Definidas em [lib/xp.ts](lib/xp.ts):
 
 - Tarefa: 10 XP (rápida), 20 XP (padrão) ou 30 XP (revisão de tópico).
+- Tópico da ementa marcado como estudado: 30 XP.
 - Estudo: 1 XP por minuto.
 - Nível: `⌊√(XP / 100)⌋` — nível 1 aos 100 XP, nível 2 aos 400, nível 3 aos 900.
 
-Desmarcar ou excluir uma tarefa concluída devolve o XP correspondente.
+Desmarcar ou excluir uma tarefa/tópico devolve o XP. O total vem de `SUM(XpEvent.amount)` — não
+existe contador separado que possa divergir das linhas de origem.
 
 ## Desenvolvimento
 
@@ -54,15 +60,18 @@ Scripts úteis:
 | Script | O que faz |
 | --- | --- |
 | `npm run db:migrate` | Cria e aplica migrations |
-| `npm run db:seed` | Popula as matérias e o estado inicial do personagem |
+| `npm run db:seed` | Popula as matérias e seus tópicos (idempotente) |
 | `npm run db:studio` | Abre o Prisma Studio |
 | `npm run lint` | ESLint |
 
 ## Modelo de dados
 
-`Subject`, `Task`, `StudySession`, `JournalPost` e `CharacterState` — ver
+`Subject`, `Topic`, `Task`, `StudySession`, `JournalPost`, `JournalLink` e `XpEvent` — ver
 [prisma/schema.prisma](prisma/schema.prisma). As matérias iniciais vêm de
 [data/subjects.ts](data/subjects.ts).
+
+`XpEvent` é o ledger de XP: toda origem (tarefa, tópico, sessão) grava um evento, e estornar
+apaga o evento em vez de gravar um valor negativo.
 
 No Prisma 7 a connection string fica em [prisma.config.ts](prisma.config.ts), não no schema, e o
 client é instanciado com o adapter `@prisma/adapter-pg` em [lib/db.ts](lib/db.ts).
@@ -71,11 +80,30 @@ client é instanciado com o adapter `@prisma/adapter-pg` em [lib/db.ts](lib/db.t
 
 | Rota | Métodos |
 | --- | --- |
+| `/api/subjects` | `GET`, `POST` |
+| `/api/subjects/[id]` | `GET`, `PATCH`, `DELETE` |
+| `/api/subjects/[id]/topics` | `GET`, `POST` |
+| `/api/topics/[id]` | `PATCH`, `DELETE` |
 | `/api/tasks` | `GET` (filtro opcional `?subjectId=`), `POST` |
 | `/api/tasks/[id]` | `PATCH`, `DELETE` |
 | `/api/sessions` | `GET`, `POST` |
 | `/api/journal` | `GET`, `POST` |
 | `/api/journal/[slug]` | `GET`, `PATCH`, `DELETE` |
+
+## O grafo do dashboard
+
+Montado em [lib/graph.ts](lib/graph.ts) e desenhado com `react-force-graph-2d` (canvas 2D, não
+WebGL — o painel do Cérebro já usa um contexto WebGL em toda página).
+
+A estrutura sai das FKs: Matéria → Tópico → Tarefa, mais posts e sessões. **Sessões são agregadas
+por matéria + dia**, senão cada pomodoro viraria um nó e afogaria o grafo.
+
+Além disso, escrever `[[Título]]` num post da Jornada cria um backlink, como no Obsidian. Os
+alvos são gravados em `JournalLink` ao salvar, mas **resolvidos só na hora de montar o grafo** —
+assim um link nunca aponta para um título que já mudou, e menções a algo que ainda não existe
+aparecem como nós "sem destino", clicáveis para criar o post.
+
+O tamanho do nó cresce com o número de conexões; nós com atividade nas últimas 24h pulsam.
 
 ## Deploy (Coolify)
 

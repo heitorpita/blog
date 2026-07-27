@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { slugify } from "@/lib/slug";
+import { parseWikiLinks } from "@/lib/wikilinks";
 
 const createPostSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -49,8 +50,9 @@ export async function POST(request: NextRequest) {
       slug,
       title,
       content,
-      excerpt: excerpt ?? content.replace(/[#*_`>-]/g, "").trim().slice(0, 180),
+      excerpt: excerpt ?? content.replace(/[#*_`>[\]-]/g, "").trim().slice(0, 180),
       subjectId: subjectId ?? null,
+      links: { create: parseWikiLinks(content).map((target) => ({ target })) },
     },
   });
 

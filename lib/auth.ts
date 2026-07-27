@@ -1,6 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
-export const SESSION_COOKIE = "studyfolio_session";
+export const SESSION_COOKIE = "sinapse_session";
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 // A chave de assinatura deriva da própria senha: trocar a senha invalida

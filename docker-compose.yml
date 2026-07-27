@@ -3,13 +3,13 @@ services:
     image: postgres:18-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: studyfolio
-      POSTGRES_PASSWORD: studyfolio
-      POSTGRES_DB: studyfolio
+      POSTGRES_USER: sinapse
+      POSTGRES_PASSWORD: sinapse
+      POSTGRES_DB: sinapse
     ports:
       - "5433:5432"
     volumes:
-      - studyfolio_dev_db:/var/lib/postgresql
+      - sinapse_dev_db:/var/lib/postgresql
 
 volumes:
-  studyfolio_dev_db:
+  sinapse_dev_db:
