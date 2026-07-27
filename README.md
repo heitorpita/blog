@@ -14,6 +14,17 @@ React Three Fiber · Recharts.
 - **Jornada** — diário em Markdown com sidebar de navegação, sumário automático e editor com prévia.
 - **Personagem** — cena 3D que evolui de cor e ganha anéis/partículas a cada nível.
 
+## Acesso
+
+App de uso pessoal, protegido por uma senha única definida na env `APP_PASSWORD`. O
+[proxy.ts](proxy.ts) bloqueia todas as páginas e rotas de API até o login, que grava um cookie
+`HttpOnly` assinado com HMAC-SHA256 ([lib/auth.ts](lib/auth.ts)) e vale 30 dias.
+
+A chave de assinatura deriva da própria senha: **trocar `APP_PASSWORD` derruba todas as sessões**.
+
+Em produção o app **falha fechado** — sem `APP_PASSWORD` definida, tudo responde 503 em vez de
+ficar aberto. Em desenvolvimento, sem a env var o login é dispensado.
+
 ## Regras de XP
 
 Definidas em [lib/xp.ts](lib/xp.ts):
@@ -72,24 +83,23 @@ A imagem é multi-stage e usa o output `standalone` do Next. O CLI do Prisma viv
 separado (`/migrate`) dentro da imagem, porque ele não faz parte do bundle standalone — o container
 roda `prisma migrate deploy` antes de subir o servidor.
 
-1. **Build Pack**: Dockerfile.
-2. **Environment Variables**:
+1. Suba um **PostgreSQL** dedicado (New Resource → Database) e copie a connection string interna.
+   Um banco novo já nasce com o usuário como dono, então não precisa de `GRANT` nenhum.
+2. **Build Pack**: Dockerfile.
+3. **Environment Variables**:
    ```
-   DATABASE_URL=postgresql://usuario:senha@HOST_POSTGRES:5432/studyfolio?schema=public
+   DATABASE_URL=<connection string interna do Postgres>
+   APP_PASSWORD=<a senha de acesso ao app>
    NODE_ENV=production
    ```
-   `HOST_POSTGRES` é o hostname interno do container Postgres na rede Docker do Coolify.
-3. Crie um database e um usuário dedicados no Postgres existente, isolados dos outros projetos:
-   ```sql
-   CREATE DATABASE studyfolio;
-   CREATE USER studyfolio_user WITH ENCRYPTED PASSWORD 'senha-forte';
-   GRANT ALL PRIVILEGES ON DATABASE studyfolio TO studyfolio_user;
-   ```
+   Nenhuma delas é build variable — o build não toca no banco nem na senha.
 4. Garanta que a aplicação esteja na mesma rede Docker do Postgres.
 5. Adicione o domínio (SSL via Let's Encrypt é automático) e faça o deploy.
+
+O cookie de sessão usa o flag `Secure` em produção, então o acesso precisa ser por **HTTPS** — o
+que o Coolify já provisiona.
 
 O seed não roda no deploy. Para popular as matérias em produção, rode `npm run db:seed` uma vez
 com o `DATABASE_URL` de produção.
 
-Como todo o conteúdo é dinâmico (o layout lê o estado do personagem no banco), o app é renderizado
-sob demanda — nada é prerenderizado em build time, então o banco não precisa existir durante o build.
+As rotas que leem o banco são todas dinâmicas, então o banco não precisa existir durante o build.
