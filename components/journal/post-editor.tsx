@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Markdown } from "@/components/journal/markdown";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { fetchJson, jsonBody } from "@/lib/fetch-json";
 
 type SubjectOption = { id: string; name: string };
@@ -24,6 +25,7 @@ export function PostEditor({
   post?: EditingPost;
 }) {
   const router = useRouter();
+  const { confirm, dialog } = useConfirm();
   const [title, setTitle] = useState(post?.title ?? "");
   const [subjectId, setSubjectId] = useState(post?.subjectId ?? "");
   const [content, setContent] = useState(post?.content ?? "");
@@ -57,7 +59,14 @@ export function PostEditor({
   async function remove() {
     if (!post) return;
 
-    if (!window.confirm(`Excluir "${post.title}"? Não dá para desfazer.`)) return;
+    const ok = await confirm({
+      title: `Excluir "${post.title}"?`,
+      description: "Não dá para desfazer.",
+      confirmLabel: "Excluir post",
+      tone: "danger",
+    });
+
+    if (!ok) return;
 
     setSaving(true);
     setError(null);
@@ -76,6 +85,8 @@ export function PostEditor({
 
   return (
     <form onSubmit={save} className="space-y-4">
+      {dialog}
+
       <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
         <input
           value={title}

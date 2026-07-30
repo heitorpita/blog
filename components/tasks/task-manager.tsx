@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { fetchJson, jsonBody } from "@/lib/fetch-json";
 import { PRIORITY_LABEL, PRIORITY_TONE, STATUS_LABEL, STATUS_ORDER } from "@/lib/labels";
 import { TASK_XP_PRESETS } from "@/lib/xp";
@@ -30,6 +31,7 @@ export function TaskManager({
   accentColor: string;
 }) {
   const router = useRouter();
+  const { confirm, dialog } = useConfirm();
   const [isPending, startTransition] = useTransition();
   const [title, setTitle] = useState("");
   const [topicId, setTopicId] = useState("");
@@ -93,12 +95,17 @@ export function TaskManager({
   async function removeTask(task: TaskItem) {
     // Excluir tarefa concluída estorna o XP em cascata. Dizer isso antes evita a
     // surpresa de ver o nível cair sem explicação.
-    const aviso =
-      task.status === "DONE"
-        ? `Excluir "${task.title}"? Os ${task.xp} XP que ela rendeu voltam atrás.`
-        : `Excluir "${task.title}"?`;
+    const ok = await confirm({
+      title: `Excluir "${task.title}"?`,
+      description:
+        task.status === "DONE"
+          ? `Os ${task.xp} XP que ela rendeu voltam atrás.`
+          : undefined,
+      confirmLabel: "Excluir",
+      tone: "danger",
+    });
 
-    if (!window.confirm(aviso)) return;
+    if (!ok) return;
 
     setError(null);
     setBusyId(task.id);
@@ -115,6 +122,8 @@ export function TaskManager({
 
   return (
     <section className="space-y-4">
+      {dialog}
+
       <div className="flex items-center justify-between">
         <h2 className="font-serif text-xl text-foreground">Tarefas</h2>
         {xpToast !== null && (

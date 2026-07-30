@@ -8,6 +8,10 @@ const createTopicSchema = z.object({
   title: z.string().trim().min(1).max(200),
 });
 
+const deleteTopicsSchema = z.object({
+  ids: z.array(z.string().trim().min(1)).min(1).max(500),
+});
+
 export async function GET(_request: NextRequest, ctx: RouteContext<"/api/subjects/[id]/topics">) {
   const denied = await denyWithoutSession();
   if (denied) return denied;
@@ -49,4 +53,30 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/subject
   });
 
   return Response.json(topic, { status: 201 });
+}
+
+/**
+ * Exclusão em lote. Apagar a ementa inteira um item por vez era inviável — e,
+ * com `window.confirm`, o navegador parava de perguntar depois do terceiro.
+ */
+export async function DELETE(
+  request: NextRequest,
+  ctx: RouteContext<"/api/subjects/[id]/topics">,
+) {
+  const denied = await denyWithoutSession();
+  if (denied) return denied;
+
+  const { id } = await ctx.params;
+  const body = await readJson(request, deleteTopicsSchema);
+  if (!body.ok) return body.response;
+
+  // `subjectId` no where não é decoração: impede que um id de outra matéria
+  // entre no lote por engano ou por payload adulterado.
+  const { count } = await prisma.topic.deleteMany({
+    where: { id: { in: body.data.ids }, subjectId: id },
+  });
+
+  // Uma instrução só, então já é atômica. O XP dos tópicos concluídos sai em
+  // cascata pelo FK, igual à exclusão individual.
+  return Response.json({ removed: count });
 }
