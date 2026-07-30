@@ -17,6 +17,10 @@ export type Phase = "FOCUS" | "BREAK";
 
 export type TimerState = {
   subjectId: string;
+  /** Tópico da ementa, opcional. Vazio = a sessão fica só na matéria. */
+  topicId: string;
+  /** O que está sendo estudado. Vai junto ao salvar. */
+  note: string;
   mode: Mode;
   focusMinutes: number;
   breakMinutes: number;
@@ -42,6 +46,8 @@ const STALE_AFTER_MS = 12 * 60 * 60 * 1000;
  */
 export const EMPTY_TIMER: TimerState = {
   subjectId: "",
+  topicId: "",
+  note: "",
   mode: "FREE",
   focusMinutes: 25,
   breakMinutes: 5,
@@ -179,7 +185,15 @@ export function requestPhaseNotifications(): void {
 
 /** Zera a corrida mantendo as preferências (matéria, modo, durações). */
 export function resetRun(state: TimerState): TimerState {
-  return { ...state, phase: "FOCUS", startedAt: null, carried: 0, banked: 0, notice: null };
+  return {
+    ...state,
+    phase: "FOCUS",
+    startedAt: null,
+    carried: 0,
+    banked: 0,
+    note: "",
+    notice: null,
+  };
 }
 
 function num(value: unknown, fallback: number): number {
@@ -219,6 +233,8 @@ function loadState(now: number): TimerState | null {
 
   return {
     subjectId: typeof stored.subjectId === "string" ? stored.subjectId : "",
+    topicId: typeof stored.topicId === "string" ? stored.topicId : "",
+    note: typeof stored.note === "string" ? stored.note : "",
     mode: stored.mode === "POMODORO" ? "POMODORO" : "FREE",
     focusMinutes: num(stored.focusMinutes, EMPTY_TIMER.focusMinutes),
     breakMinutes: num(stored.breakMinutes, EMPTY_TIMER.breakMinutes),

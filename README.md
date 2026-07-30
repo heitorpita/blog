@@ -14,7 +14,10 @@ React Three Fiber · Recharts.
   compacto com nível, estudo na semana e próxima tarefa.
 - **Matérias** — criar, editar e excluir matérias, checklist de tópicos da ementa (30 XP cada) e
   tarefas com prioridade, status e XP. Excluir avisa, com números, o que sai em cascata.
-- **Cronômetro** — modo livre e Pomodoro configurável, vinculado a uma matéria; converte tempo em XP.
+- **Cronômetro** — modo livre e Pomodoro configurável, vinculado a matéria e (opcionalmente)
+  tópico, com anotação do que foi estudado; converte tempo em XP. Também dá para **lançar estudo
+  retroativo** (aula, monitoria, papel — o que o cronômetro não pegou) e editar ou excluir
+  sessões já registradas: corrigir 500 min para 50 ajusta o XP junto.
 - **Jornada** — diário em Markdown com sidebar de navegação, sumário automático e editor com
   prévia fiel (é o mesmo renderizador da leitura). Posts podem ser editados e excluídos; o
   endereço não muda ao renomear o título, para não quebrar links `[[wiki]]` já existentes.
