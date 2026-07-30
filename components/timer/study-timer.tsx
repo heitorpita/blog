@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { fetchJson, jsonBody } from "@/lib/fetch-json";
 import { XP_PER_MINUTE_STUDIED } from "@/lib/xp";
 import {
   elapsedSeconds,
@@ -88,30 +89,30 @@ export function StudyTimer({ subjects }: { subjects: SubjectOption[] }) {
     }
 
     setSaving(true);
-    const response = await fetch("/api/sessions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const result = await fetchJson<{ xpEarned: number }>(
+      "/api/sessions",
+      jsonBody("POST", {
         subjectId,
         mode: state.mode,
         durationMinutes: pendingMinutes,
       }),
-    });
+    );
     setSaving(false);
 
-    if (!response.ok) {
+    // O estado NÃO é zerado quando falha: os minutos estudados continuam ali
+    // para uma segunda tentativa. Perder a sessão por causa de um erro de rede
+    // seria o pior desfecho possível nesta tela.
+    if (!result.ok) {
       setTimerState((current) => ({
         ...current,
-        notice: "Não foi possível salvar a sessão.",
+        notice: `${result.message} Seus ${pendingMinutes} min continuam guardados.`,
       }));
       return;
     }
 
-    const session = await response.json();
-
     setTimerState((current) => ({
       ...resetRun(current),
-      notice: `Sessão salva: ${pendingMinutes} min · +${session.xpEarned} XP`,
+      notice: `Sessão salva: ${pendingMinutes} min · +${result.data.xpEarned} XP`,
     }));
     router.refresh();
   }

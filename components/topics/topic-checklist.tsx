@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Button } from "@/components/ui/button";
+import { fetchJson, jsonBody } from "@/lib/fetch-json";
 import { TOPIC_COMPLETION_XP } from "@/lib/xp";
 
 export type TopicItem = {
@@ -25,18 +26,28 @@ export function TopicChecklist({
   const [isPending, startTransition] = useTransition();
   const [title, setTitle] = useState("");
   const [xpToast, setXpToast] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   function refresh() {
     startTransition(() => router.refresh());
   }
 
   async function toggle(topic: TopicItem) {
-    await fetch(`/api/topics/${topic.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ completed: !topic.completed }),
-    });
+    setError(null);
+    setBusyId(topic.id);
+    const result = await fetchJson(
+      `/api/topics/${topic.id}`,
+      jsonBody("PATCH", { completed: !topic.completed }),
+    );
+    setBusyId(null);
 
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+
+    // Só comemora depois que o servidor confirmou que o XP entrou.
     if (!topic.completed) {
       setXpToast(TOPIC_COMPLETION_XP);
       setTimeout(() => setXpToast(null), 1800);
@@ -49,18 +60,39 @@ export function TopicChecklist({
     event.preventDefault();
     if (!title.trim()) return;
 
-    await fetch(`/api/subjects/${subjectId}/topics`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
-    });
+    setError(null);
+    const result = await fetchJson(
+      `/api/subjects/${subjectId}/topics`,
+      jsonBody("POST", { title }),
+    );
+
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
 
     setTitle("");
     refresh();
   }
 
-  async function removeTopic(id: string) {
-    await fetch(`/api/topics/${id}`, { method: "DELETE" });
+  async function removeTopic(topic: TopicItem) {
+    // Tópico estudado carrega XP; excluir devolve em cascata, e o nível cai.
+    const aviso = topic.completed
+      ? `Excluir "${topic.title}"? Os ${TOPIC_COMPLETION_XP} XP de tê-lo estudado voltam atrás.`
+      : `Excluir "${topic.title}"?`;
+
+    if (!window.confirm(aviso)) return;
+
+    setError(null);
+    setBusyId(topic.id);
+    const result = await fetchJson(`/api/topics/${topic.id}`, jsonBody("DELETE"));
+    setBusyId(null);
+
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+
     refresh();
   }
 
@@ -83,10 +115,17 @@ export function TopicChecklist({
         )}
 
         {topics.map((topic) => (
-          <li key={topic.id} className="group flex items-center gap-3 px-4 py-2.5">
+          <li
+            key={topic.id}
+            className={clsx(
+              "group flex items-center gap-3 px-4 py-2.5 transition-opacity",
+              busyId === topic.id && "opacity-60",
+            )}
+          >
             <button
               type="button"
               onClick={() => toggle(topic)}
+              disabled={busyId === topic.id}
               aria-pressed={topic.completed}
               aria-label={`Marcar "${topic.title}" como estudado`}
               className={clsx(
@@ -120,7 +159,8 @@ export function TopicChecklist({
 
             <button
               type="button"
-              onClick={() => removeTopic(topic.id)}
+              onClick={() => removeTopic(topic)}
+              disabled={busyId === topic.id}
               aria-label={`Excluir tópico "${topic.title}"`}
               className="text-muted opacity-0 transition-opacity hover:text-rose-400 focus:opacity-100 group-hover:opacity-100"
             >
@@ -129,6 +169,12 @@ export function TopicChecklist({
           </li>
         ))}
       </ul>
+
+      {error && (
+        <p role="alert" className="text-sm text-rose-400">
+          {error}
+        </p>
+      )}
 
       <form onSubmit={addTopic} className="flex gap-2">
         <input

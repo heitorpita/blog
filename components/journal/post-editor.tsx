@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { fetchJson, jsonBody } from "@/lib/fetch-json";
 
 type SubjectOption = { id: string; name: string };
 
@@ -43,21 +44,19 @@ export function PostEditor({ subjects }: { subjects: SubjectOption[] }) {
     setSaving(true);
     setError(null);
 
-    const response = await fetch("/api/journal", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, content, subjectId: subjectId || null }),
-    });
+    const result = await fetchJson<{ slug: string }>(
+      "/api/journal",
+      jsonBody("POST", { title, content, subjectId: subjectId || null }),
+    );
 
     setSaving(false);
 
-    if (!response.ok) {
-      setError("Não foi possível salvar o post.");
+    if (!result.ok) {
+      setError(result.message);
       return;
     }
 
-    const post = await response.json();
-    router.push(`/journal/${post.slug}`);
+    router.push(`/journal/${result.data.slug}`);
     router.refresh();
   }
 

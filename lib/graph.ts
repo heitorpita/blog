@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { linkKey } from "@/lib/wikilinks";
+import { STATUS_LABEL } from "@/lib/labels";
 import { dayKey } from "@/lib/time";
 import type { GraphData, GraphEdge, GraphNode } from "@/lib/graph-types";
 
@@ -86,7 +87,7 @@ export async function buildGraph(): Promise<GraphData> {
         recent: task.updatedAt >= since,
         subjectId: subject.id,
         href: `/subjects/${subject.id}`,
-        detail: `${task.status === "DONE" ? "Concluída" : task.status === "IN_PROGRESS" ? "Em progresso" : "Pendente"} · ${task.xp} XP`,
+        detail: `${STATUS_LABEL[task.status]} · ${task.xp} XP`,
       });
 
       // Pendura a tarefa no tópico quando existir, senão direto na matéria.

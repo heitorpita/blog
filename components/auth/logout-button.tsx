@@ -1,12 +1,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { fetchJson, jsonBody } from "@/lib/fetch-json";
 
 export function LogoutButton() {
   const router = useRouter();
 
   async function logout() {
-    await fetch("/api/logout", { method: "POST" });
+    // Mesmo se a chamada falhar, sair da tela é o comportamento esperado: o
+    // cookie pode já ter expirado, e prender o usuário aqui não ajuda.
+    await fetchJson("/api/logout", jsonBody("POST"));
     router.replace("/login");
     router.refresh();
   }

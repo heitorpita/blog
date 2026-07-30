@@ -5,13 +5,11 @@ import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { KnowledgeGraph } from "@/components/graph/knowledge-graph";
 import { requireSession } from "@/lib/session";
+import { PRIORITY_LABEL, PRIORITY_TONE } from "@/lib/labels";
 import { getTotalXp } from "@/lib/xp-ledger";
 import { buildGraph } from "@/lib/graph";
 import { xpProgress } from "@/lib/xp";
 import { formatMinutes } from "@/lib/format";
-
-const PRIORITY_LABEL = { LOW: "Baixa", MEDIUM: "Média", HIGH: "Alta" } as const;
-const PRIORITY_TONE = { LOW: "neutral", MEDIUM: "warning", HIGH: "danger" } as const;
 
 async function findMinutesThisWeek() {
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);

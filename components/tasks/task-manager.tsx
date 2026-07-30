@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { fetchJson, jsonBody } from "@/lib/fetch-json";
+import { PRIORITY_LABEL, PRIORITY_TONE, STATUS_LABEL, STATUS_ORDER } from "@/lib/labels";
 import { TASK_XP_PRESETS } from "@/lib/xp";
 
 export type TaskItem = {
@@ -15,15 +17,6 @@ export type TaskItem = {
   status: "PENDING" | "IN_PROGRESS" | "DONE";
   xp: number;
 };
-
-const PRIORITY_LABEL = { LOW: "Baixa", MEDIUM: "Média", HIGH: "Alta" } as const;
-const PRIORITY_TONE = { LOW: "neutral", MEDIUM: "warning", HIGH: "danger" } as const;
-const STATUS_ORDER = ["PENDING", "IN_PROGRESS", "DONE"] as const;
-const STATUS_LABEL = {
-  PENDING: "Pendente",
-  IN_PROGRESS: "Em progresso",
-  DONE: "Concluída",
-} as const;
 
 export function TaskManager({
   subjectId,
@@ -43,6 +36,8 @@ export function TaskManager({
   const [priority, setPriority] = useState<TaskItem["priority"]>("MEDIUM");
   const [xp, setXp] = useState<number>(TASK_XP_PRESETS.quick);
   const [xpToast, setXpToast] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   function refresh() {
     startTransition(() => router.refresh());
@@ -52,17 +47,16 @@ export function TaskManager({
     event.preventDefault();
     if (!title.trim()) return;
 
-    await fetch("/api/tasks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title,
-        subjectId,
-        topicId: topicId || null,
-        priority,
-        xp,
-      }),
-    });
+    setError(null);
+    const result = await fetchJson(
+      "/api/tasks",
+      jsonBody("POST", { title, subjectId, topicId: topicId || null, priority, xp }),
+    );
+
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
 
     setTitle("");
     setTopicId("");
@@ -73,12 +67,21 @@ export function TaskManager({
     const nextIndex = (STATUS_ORDER.indexOf(task.status) + 1) % STATUS_ORDER.length;
     const nextStatus = STATUS_ORDER[nextIndex];
 
-    await fetch(`/api/tasks/${task.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: nextStatus }),
-    });
+    setError(null);
+    setBusyId(task.id);
+    const result = await fetchJson(
+      `/api/tasks/${task.id}`,
+      jsonBody("PATCH", { status: nextStatus }),
+    );
+    setBusyId(null);
 
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+
+    // O toast só aparece depois do servidor confirmar. Antes ele comemorava XP
+    // que podia nunca ter sido gravado.
     if (nextStatus === "DONE") {
       setXpToast(task.xp);
       setTimeout(() => setXpToast(null), 1800);
@@ -87,8 +90,26 @@ export function TaskManager({
     refresh();
   }
 
-  async function removeTask(id: string) {
-    await fetch(`/api/tasks/${id}`, { method: "DELETE" });
+  async function removeTask(task: TaskItem) {
+    // Excluir tarefa concluída estorna o XP em cascata. Dizer isso antes evita a
+    // surpresa de ver o nível cair sem explicação.
+    const aviso =
+      task.status === "DONE"
+        ? `Excluir "${task.title}"? Os ${task.xp} XP que ela rendeu voltam atrás.`
+        : `Excluir "${task.title}"?`;
+
+    if (!window.confirm(aviso)) return;
+
+    setError(null);
+    setBusyId(task.id);
+    const result = await fetchJson(`/api/tasks/${task.id}`, jsonBody("DELETE"));
+    setBusyId(null);
+
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+
     refresh();
   }
 
@@ -157,6 +178,12 @@ export function TaskManager({
         </div>
       </form>
 
+      {error && (
+        <p role="alert" className="text-sm text-rose-400">
+          {error}
+        </p>
+      )}
+
       <ul className="space-y-2">
         {tasks.length === 0 && (
           <li className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted">
@@ -167,12 +194,16 @@ export function TaskManager({
         {tasks.map((task) => (
           <li
             key={task.id}
-            className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3"
+            className={clsx(
+              "flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3 transition-opacity",
+              busyId === task.id && "opacity-60",
+            )}
           >
             <button
               type="button"
               onClick={() => cycleStatus(task)}
-              title={`Status: ${STATUS_LABEL[task.status]}`}
+              disabled={busyId === task.id}
+              aria-label={`${task.title} — ${STATUS_LABEL[task.status]}. Avançar status.`}
               className={clsx(
                 "size-4 shrink-0 rounded-full border-2 transition-colors",
                 task.status === "DONE" && "border-transparent",
@@ -203,7 +234,12 @@ export function TaskManager({
             <Badge tone={PRIORITY_TONE[task.priority]}>{PRIORITY_LABEL[task.priority]}</Badge>
             <span className="text-xs text-muted">{task.xp} XP</span>
 
-            <Button variant="ghost" onClick={() => removeTask(task.id)} aria-label="Excluir">
+            <Button
+              variant="ghost"
+              onClick={() => removeTask(task)}
+              disabled={busyId === task.id}
+              aria-label={`Excluir tarefa "${task.title}"`}
+            >
               ×
             </Button>
           </li>
