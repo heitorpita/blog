@@ -12,10 +12,12 @@ React Three Fiber · Recharts.
 - **Dashboard** — grafo interativo estilo Obsidian ligando matérias, tópicos, tarefas, sessões e
   posts. Zoom, arrastar nós, filtro por matéria e painel de detalhes. Acima dele, um resumo
   compacto com nível, estudo na semana e próxima tarefa.
-- **Matérias** — CRUD de matérias, checklist de tópicos da ementa (30 XP cada) e tarefas com
-  prioridade, status e XP.
+- **Matérias** — criar, editar e excluir matérias, checklist de tópicos da ementa (30 XP cada) e
+  tarefas com prioridade, status e XP. Excluir avisa, com números, o que sai em cascata.
 - **Cronômetro** — modo livre e Pomodoro configurável, vinculado a uma matéria; converte tempo em XP.
-- **Jornada** — diário em Markdown com sidebar de navegação, sumário automático e editor com prévia.
+- **Jornada** — diário em Markdown com sidebar de navegação, sumário automático e editor com
+  prévia fiel (é o mesmo renderizador da leitura). Posts podem ser editados e excluídos; o
+  endereço não muda ao renomear o título, para não quebrar links `[[wiki]]` já existentes.
 - **Cérebro** — rede neural 3D que ganha neurônios e sinapses a cada nível, com animação na
   subida. Títulos por faixa (Iniciante → Aprendiz → Estudioso → Mestre), streak de dias
   consecutivos com bônus em marcos, curva de XP acumulado, heatmap de dias estudados,
@@ -54,6 +56,11 @@ Definidas em [lib/xp.ts](lib/xp.ts):
 
 Desmarcar ou excluir uma tarefa/tópico devolve o XP. O total vem de `SUM(XpEvent.amount)` — não
 existe contador separado que possa divergir das linhas de origem.
+
+Excluir uma **matéria**, porém, não apaga o XP dela: os eventos ficam sem vínculo
+(`ON DELETE SET NULL`) e continuam somando no total. O esforço aconteceu, e o nível não regride
+por arquivar uma disciplina do semestre passado — esse XP só deixa de aparecer no breakdown
+por matéria.
 
 A gravação do XP acontece na mesma transação da mutação que a originou, e uma tarefa/tópico só
 pode ter um evento de XP (índice único no banco): concluir com dois cliques rápidos não dobra os

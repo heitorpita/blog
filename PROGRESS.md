@@ -250,6 +250,22 @@ depois exigiria duas migrations. `CharacterState` é removido: `totalXp` passa a
 - Evite dois botões com o mesmo rótulo na mesma página ("Adicionar" × 2 quebrou teste e leitor de
   tela); hoje são "Adicionar tópico" e "Adicionar tarefa".
 - **Datas: sempre use `lib/time.ts`**, nunca `toISOString().slice(0,10)` — este último usa UTC e
-  erra o dia para quem estuda à noite.
+  erra o dia para quem estuda à noite. Coberto por `test/time.test.ts`.
+- **Toda mutação no cliente passa por `lib/fetch-json.ts`.** Ele nunca lança, devolve resultado
+  tipado e manda para `/login` no 401. `fetch` solto engolia erro de rede dentro do handler de
+  evento. Exceção: `components/auth/login-form.tsx`, onde o redirect no 401 viraria laço.
+- **Rotas de escrita leem o corpo com `readJson` (`lib/http.ts`).** `request.json()` lança antes
+  do `safeParse`, então corpo malformado virava 500 com a validação nunca sendo consultada.
+- **Markdown do diário: `components/journal/markdown.tsx`, nunca MDX.** MDX avalia `{}`, e uma
+  chave solta num post derruba a página. O mesmo componente serve leitura e prévia.
+- **Slug de título vem do `github-slugger`, via `lib/toc.ts`,** e carrega o prefixo
+  `user-content-` que o `rehype-sanitize` aplica. Usar `lib/slug.ts` aqui quebra as âncoras do
+  sumário (ele tira acento; o rehype não). Coberto por `test/markdown.test.ts`.
+- **Consulta usada por mais de uma página vai para `lib/queries/`.** Consulta de consumidor único
+  fica na página — a fronteira é duplicação real, não pureza.
+- **Testes: `npm test` (`tsx --test`), sem banco.** Regra nova de XP, streak, fuso ou wikilink
+  entra com teste junto; é onde mora a complexidade do projeto.
+- Consulta acima de 50ms aparece no terminal em desenvolvimento (`lib/db.ts`). É a régua para
+  decidir o que otimizar — `getStreak()` e `getTotalXp()` rodam em toda página.
 - O app é dark-only (`globals.css` fixa `color-scheme: dark`), então paletas de gráfico só
   precisam ser validadas contra a superfície escura `#16161d`.

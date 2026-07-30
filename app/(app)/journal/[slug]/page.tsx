@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
+import { buttonClasses } from "@/components/ui/button";
 import { Markdown } from "@/components/journal/markdown";
 import { requireSession } from "@/lib/session";
 import { extractToc } from "@/lib/toc";
@@ -57,7 +59,15 @@ export default async function JournalPostPage({ params }: PageProps<"/journal/[s
               </Badge>
             )}
           </div>
-          <h1 className="font-serif text-3xl leading-tight text-foreground">{post.title}</h1>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <h1 className="font-serif text-3xl leading-tight text-foreground">{post.title}</h1>
+            <Link
+              href={`/journal/${post.slug}/edit`}
+              className={buttonClasses("secondary", "shrink-0 px-2.5 py-1 text-xs")}
+            >
+              Editar
+            </Link>
+          </div>
         </header>
 
         <div className="prose prose-journal max-w-none prose-headings:font-serif prose-pre:bg-surface-raised">

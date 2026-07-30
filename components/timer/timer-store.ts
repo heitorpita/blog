@@ -112,6 +112,71 @@ export function rollPomodoro(state: TimerState, now: number): TimerState {
   };
 }
 
+/**
+ * Avisa que uma fase virou. O único momento em que o app precisa interromper o
+ * usuário é justo quando ele não está olhando a tela — som e notificação são o
+ * que atravessa uma aba em segundo plano; texto na tela não.
+ *
+ * Tudo aqui degrada em silêncio: sem permissão de notificação, sem áudio
+ * permitido ou fora do navegador, o cronômetro segue funcionando igual.
+ */
+export function announcePhase(phase: Phase, minutosGuardados: number): void {
+  if (typeof window === "undefined") return;
+
+  const titulo = phase === "BREAK" ? "Foco concluído" : "Pausa acabou";
+  const corpo =
+    phase === "BREAK"
+      ? `${minutosGuardados} min guardados. Hora da pausa.`
+      : "Bora pro próximo ciclo.";
+
+  try {
+    // Dois tons curtos via WebAudio: não precisa de arquivo de áudio nem de
+    // request de rede.
+    const Ctor = window.AudioContext ?? (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (Ctor) {
+      const ctx = new Ctor();
+      const ganho = ctx.createGain();
+      ganho.gain.value = 0.08;
+      ganho.connect(ctx.destination);
+
+      [0, 0.18].forEach((atraso, i) => {
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = phase === "BREAK" ? 660 + i * 220 : 880 - i * 220;
+        osc.connect(ganho);
+        osc.start(ctx.currentTime + atraso);
+        osc.stop(ctx.currentTime + atraso + 0.15);
+      });
+
+      setTimeout(() => ctx.close(), 800);
+    }
+  } catch {
+    // Autoplay bloqueado ou WebAudio indisponível: segue sem som.
+  }
+
+  try {
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification(titulo, { body: corpo, tag: "sinapse-pomodoro" });
+    }
+  } catch {
+    // Notificação indisponível: o aviso na tela ainda está lá.
+  }
+}
+
+/**
+ * Pede permissão de notificação no gesto do usuário (clicar em Iniciar), que é
+ * o único momento em que o navegador aceita o pedido — e o único em que ele faz
+ * sentido para quem está usando.
+ */
+export function requestPhaseNotifications(): void {
+  if (typeof window === "undefined" || !("Notification" in window)) return;
+  if (Notification.permission !== "default") return;
+
+  void Notification.requestPermission().catch(() => {
+    // Recusar é resposta válida; não insistimos.
+  });
+}
+
 /** Zera a corrida mantendo as preferências (matéria, modo, durações). */
 export function resetRun(state: TimerState): TimerState {
   return { ...state, phase: "FOCUS", startedAt: null, carried: 0, banked: 0, notice: null };

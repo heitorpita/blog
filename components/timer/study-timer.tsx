@@ -8,11 +8,13 @@ import { Card } from "@/components/ui/card";
 import { fetchJson, jsonBody } from "@/lib/fetch-json";
 import { XP_PER_MINUTE_STUDIED } from "@/lib/xp";
 import {
+  announcePhase,
   elapsedSeconds,
   getTimerServerSnapshot,
   getTimerSnapshot,
   pendingMinutes as pendingMinutesOf,
   phaseSeconds,
+  requestPhaseNotifications,
   resetRun,
   rollPomodoro,
   setTimerState,
@@ -46,9 +48,18 @@ export function StudyTimer({ subjects }: { subjects: SubjectOption[] }) {
     const id = setInterval(() => {
       const tick = Date.now();
       setNow(tick);
+
       // Fecha as fases vencidas aqui, onde o tempo de fato avança. Devolve o
       // mesmo objeto quando não há nada a fechar, então não gera renderização.
-      setTimerState((current) => rollPomodoro(current, tick));
+      setTimerState((current) => {
+        const rolled = rollPomodoro(current, tick);
+        if (rolled !== current) {
+          // Fora do updater não dá: é aqui que sabemos que a fase virou. O
+          // aviso é efeito colateral no callback do intervalo, não no render.
+          queueMicrotask(() => announcePhase(rolled.phase, rolled.banked - current.banked));
+        }
+        return rolled;
+      });
     }, 500);
 
     return () => clearInterval(id);
@@ -68,6 +79,12 @@ export function StudyTimer({ subjects }: { subjects: SubjectOption[] }) {
   const display = state.mode === "FREE" ? elapsed : Math.max(phaseLength - elapsed, 0);
 
   function toggleRunning() {
+    // O navegador só aceita o pedido de permissão dentro de um gesto do usuário,
+    // e este é o momento em que ela passa a fazer sentido.
+    if (state.startedAt === null && state.mode === "POMODORO") {
+      requestPhaseNotifications();
+    }
+
     setTimerState((current) =>
       current.startedAt === null
         ? { ...current, startedAt: Date.now(), notice: null }
