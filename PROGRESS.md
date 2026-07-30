@@ -211,9 +211,19 @@ depois exigiria duas migrations. `CharacterState` é removido: `totalXp` passa a
 
 ## Decisões e observações importantes
 
-- O app é protegido por senha única (`APP_PASSWORD`) via `proxy.ts`. **Qualquer rota de API nova
-  já nasce protegida** pelo matcher do proxy — não precisa adicionar auth manualmente, mas
-  lembre que testes via `curl` precisam do cookie de sessão.
+- O app é protegido por senha única (`APP_PASSWORD`). **Toda rota nova precisa da própria
+  checagem** — `denyWithoutSession()` no começo de cada handler de API, `requireSession()` no
+  começo de cada page/layout que lê o banco (ambos em `lib/session.ts`). Testes via `curl`
+  precisam do cookie de sessão.
+- **O `proxy.ts` NÃO é a autenticação**, é só um atalho para redirecionar cedo. A doc do próprio
+  Next (`node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/proxy.md`) diz
+  para sempre checar dentro de cada rota, porque o matcher tem furos: ele ignora qualquer caminho
+  terminado em `.png`/`.svg`/etc., então `/api/tasks/foo.png` chega ao handler sem passar pelo
+  proxy. Verificado com `curl`: `/qualquer-pagina` responde 307 (proxy redireciona) e
+  `/qualquer-pagina.png` responde 404 (proxy não rodou).
+- `/api/login` tem freio de força bruta em memória (`lib/login-throttle.ts`): 5 erros por IP
+  bloqueiam com backoff exponencial (30s → 15min), mais um teto global que segura IP forjado.
+  Reiniciar o container zera a contagem, o que é aceitável — o atacante perde o progresso junto.
 - As páginas do app vivem no route group `app/(app)/` (que carrega o `AppShell`). O route group
   não aparece na URL. `/login` fica fora dele de propósito.
 - `app/(app)/layout.tsx` tem `export const dynamic = "force-dynamic"` porque o shell lê o banco.
@@ -223,6 +233,15 @@ depois exigiria duas migrations. `CharacterState` é removido: `totalXp` passa a
 - O client do Prisma é gerado em `lib/generated/` (gitignored, recriado pelo `postinstall`).
 - **Estorno de XP apaga o evento** em vez de gravar um valor negativo, para o feed da tarefa 3 não
   encher de ruído de idas e voltas. Deletar tarefa/tópico/matéria remove o XP em cascata (FK).
+- **Mutação e XP andam sempre na mesma `$transaction`**, e a troca de status usa compare-and-swap
+  (`updateMany` com o status anterior no `where`) para dois cliques rápidos não virarem dois
+  eventos. A trava final é do banco: `@@unique([taskId])` e `@@unique([topicId])` em `XpEvent`
+  — no Postgres NULLs são distintos num índice único, então eventos de sessão e streak seguem
+  livres.
+- **O cronômetro nunca soma ticks.** Aba oculta faz o navegador estrangular `setInterval` para
+  até uma chamada por minuto; o tempo vem sempre de `Date.now() - startedAt`
+  (`components/timer/timer-store.ts`), e o intervalo só repinta. O estado mora em `localStorage`
+  via `useSyncExternalStore` para sobreviver a F5, a fechar a aba e a navegar para outra página.
 - **Migrations com drop precisam ser escritas à mão** neste ambiente (não interativo). Use
   `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`,
   reordene para backfillar antes dos drops, e aplique com `npx prisma migrate deploy`.
@@ -231,6 +250,22 @@ depois exigiria duas migrations. `CharacterState` é removido: `totalXp` passa a
 - Evite dois botões com o mesmo rótulo na mesma página ("Adicionar" × 2 quebrou teste e leitor de
   tela); hoje são "Adicionar tópico" e "Adicionar tarefa".
 - **Datas: sempre use `lib/time.ts`**, nunca `toISOString().slice(0,10)` — este último usa UTC e
-  erra o dia para quem estuda à noite.
+  erra o dia para quem estuda à noite. Coberto por `test/time.test.ts`.
+- **Toda mutação no cliente passa por `lib/fetch-json.ts`.** Ele nunca lança, devolve resultado
+  tipado e manda para `/login` no 401. `fetch` solto engolia erro de rede dentro do handler de
+  evento. Exceção: `components/auth/login-form.tsx`, onde o redirect no 401 viraria laço.
+- **Rotas de escrita leem o corpo com `readJson` (`lib/http.ts`).** `request.json()` lança antes
+  do `safeParse`, então corpo malformado virava 500 com a validação nunca sendo consultada.
+- **Markdown do diário: `components/journal/markdown.tsx`, nunca MDX.** MDX avalia `{}`, e uma
+  chave solta num post derruba a página. O mesmo componente serve leitura e prévia.
+- **Slug de título vem do `github-slugger`, via `lib/toc.ts`,** e carrega o prefixo
+  `user-content-` que o `rehype-sanitize` aplica. Usar `lib/slug.ts` aqui quebra as âncoras do
+  sumário (ele tira acento; o rehype não). Coberto por `test/markdown.test.ts`.
+- **Consulta usada por mais de uma página vai para `lib/queries/`.** Consulta de consumidor único
+  fica na página — a fronteira é duplicação real, não pureza.
+- **Testes: `npm test` (`tsx --test`), sem banco.** Regra nova de XP, streak, fuso ou wikilink
+  entra com teste junto; é onde mora a complexidade do projeto.
+- Consulta acima de 50ms aparece no terminal em desenvolvimento (`lib/db.ts`). É a régua para
+  decidir o que otimizar — `getStreak()` e `getTotalXp()` rodam em toda página.
 - O app é dark-only (`globals.css` fixa `color-scheme: dark`), então paletas de gráfico só
   precisam ser validadas contra a superfície escura `#16161d`.

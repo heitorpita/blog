@@ -6,6 +6,13 @@ import {
   createSessionToken,
   isCorrectPassword,
 } from "@/lib/auth";
+import { readJson } from "@/lib/http";
+import {
+  checkLoginAllowed,
+  clientKey,
+  registerLoginFailure,
+  registerLoginSuccess,
+} from "@/lib/login-throttle";
 
 const loginSchema = z.object({ password: z.string().min(1).max(200) });
 
@@ -16,11 +23,31 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "APP_PASSWORD não configurada" }, { status: 503 });
   }
 
-  const parsed = loginSchema.safeParse(await request.json());
+  const key = clientKey(request);
+  const verdict = checkLoginAllowed(key);
 
-  if (!parsed.success || !isCorrectPassword(parsed.data.password, password)) {
+  if (!verdict.allowed) {
+    return Response.json(
+      { error: "Muitas tentativas. Tente de novo mais tarde." },
+      { status: 429, headers: { "Retry-After": String(verdict.retryAfterSeconds) } },
+    );
+  }
+
+  const body = await readJson(request, loginSchema);
+
+  // Corpo lixo é bot varrendo, não usuário digitando errado: conta como
+  // tentativa falha para não virar rota livre de contornar o freio.
+  if (!body.ok) {
+    registerLoginFailure(key);
+    return body.response;
+  }
+
+  if (!isCorrectPassword(body.data.password, password)) {
+    registerLoginFailure(key);
     return Response.json({ error: "Senha incorreta" }, { status: 401 });
   }
+
+  registerLoginSuccess(key);
 
   const response = new Response(null, { status: 204 });
 

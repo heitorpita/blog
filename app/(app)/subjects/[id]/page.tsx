@@ -1,43 +1,60 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/db";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { TaskManager } from "@/components/tasks/task-manager";
 import { TopicChecklist } from "@/components/topics/topic-checklist";
+import { SubjectSettings } from "@/components/subjects/subject-settings";
+import { requireSession } from "@/lib/session";
+import { getSubjectDetail } from "@/lib/queries/subjects";
 import { formatMinutes } from "@/lib/format";
 
 export default async function SubjectPage({ params }: PageProps<"/subjects/[id]">) {
-  const { id } = await params;
+  await requireSession();
 
-  const subject = await prisma.subject.findUnique({
-    where: { id },
-    include: {
-      topics: { orderBy: { order: "asc" } },
-      tasks: { orderBy: [{ status: "asc" }, { createdAt: "desc" }] },
-      sessions: { select: { durationMinutes: true } },
-    },
-  });
+  const { id } = await params;
+  const subject = await getSubjectDetail(id);
 
   if (!subject) notFound();
-
-  const topicsDone = subject.topics.filter((topic) => topic.completed).length;
-  const minutes = subject.sessions.reduce((sum, s) => sum + s.durationMinutes, 0);
 
   return (
     <div className="space-y-8">
       <header className="space-y-3">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted">
-          {subject.code} · {subject.hours}h · {subject.teacher}
-        </p>
-        <h1 className="font-serif text-3xl text-foreground">{subject.name}</h1>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted">
+              {subject.code} · {subject.hours}h · {subject.teacher}
+            </p>
+            <h1 className="mt-1 font-serif text-3xl text-foreground">{subject.name}</h1>
+          </div>
+
+          <SubjectSettings
+            subject={{
+              id: subject.id,
+              name: subject.name,
+              code: subject.code,
+              teacher: subject.teacher,
+              hours: subject.hours,
+              color: subject.color,
+            }}
+            counts={{
+              topics: subject.topics.length,
+              tasks: subject.tasks.length,
+              sessions: subject.sessionCount,
+              xp: subject.xpTotal,
+            }}
+          />
+        </div>
+
         <ProgressBar
-          progress={subject.topics.length === 0 ? 0 : topicsDone / subject.topics.length}
+          progress={
+            subject.topics.length === 0 ? 0 : subject.topicsDone / subject.topics.length
+          }
           color={subject.color}
         />
         <div className="flex justify-between text-xs text-muted">
           <span>
-            {topicsDone}/{subject.topics.length} tópicos estudados
+            {subject.topicsDone}/{subject.topics.length} tópicos estudados
           </span>
-          <span>{formatMinutes(minutes)} estudados</span>
+          <span>{formatMinutes(subject.minutes)} estudados</span>
         </div>
       </header>
 

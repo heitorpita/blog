@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { fetchJson, jsonBody } from "@/lib/fetch-json";
 
 const COLOR_CHOICES = [
   "#e63946",
@@ -41,10 +42,9 @@ export function SubjectCreator() {
     setSaving(true);
     setError(null);
 
-    const response = await fetch("/api/subjects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const result = await fetchJson(
+      "/api/subjects",
+      jsonBody("POST", {
         name,
         code,
         hours,
@@ -55,12 +55,17 @@ export function SubjectCreator() {
           .map((line) => line.trim())
           .filter(Boolean),
       }),
-    });
+    );
 
     setSaving(false);
 
-    if (!response.ok) {
-      setError("Não foi possível criar a matéria. Confira o código e o nome.");
+    if (!result.ok) {
+      // 400 é erro de preenchimento; o resto vem com a mensagem do helper.
+      setError(
+        result.status === 400
+          ? "Confira os campos: nome e código são obrigatórios."
+          : result.message,
+      );
       return;
     }
 

@@ -20,27 +20,29 @@ export type XpEventItem = {
   subjectColor: string | null;
 };
 
-/** Dias distintos com pelo menos uma sessão, no fuso local, do mais recente ao mais antigo. */
+/** Dias com pelo menos uma sessão, no fuso local. Pode repetir e vir fora de ordem. */
 async function studiedDays(): Promise<string[]> {
   const sessions = await prisma.studySession.findMany({ select: { endedAt: true } });
-  const today = todayKey();
+  return sessions.map((session) => dayKey(session.endedAt));
+}
 
-  return [...new Set(sessions.map((session) => dayKey(session.endedAt)))]
+/**
+ * A parte que pensa, separada da que consulta. É a lógica mais sutil do app
+ * (vale hoje-ou-ontem, relógio adiantado, maior sequência) e agora dá para
+ * testá-la sem banco — ver test/brain.test.ts.
+ */
+export function streakFromDays(rawDays: string[], today: string): StreakInfo {
+  const days = [...new Set(rawDays)]
     // Um relógio adiantado gravaria uma sessão "de amanhã", e aí o dia mais
     // recente não seria hoje nem ontem — zerando o streak sem motivo.
     .filter((day) => day <= today)
     .sort()
     .reverse();
-}
-
-export async function getStreak(): Promise<StreakInfo> {
-  const days = await studiedDays();
 
   if (days.length === 0) {
     return { current: 0, longest: 0, studiedToday: false };
   }
 
-  const today = todayKey();
   const studiedToday = days[0] === today;
 
   // O streak continua vivo se você estudou hoje ou ontem — ainda dá tempo de manter.
@@ -65,6 +67,10 @@ export async function getStreak(): Promise<StreakInfo> {
   }
 
   return { current, longest: Math.max(longest, current), studiedToday };
+}
+
+export async function getStreak(): Promise<StreakInfo> {
+  return streakFromDays(await studiedDays(), todayKey());
 }
 
 export async function getXpOverTime(days = 90): Promise<XpPoint[]> {
@@ -132,6 +138,12 @@ export async function getStudyHeatmap(weeks = 26): Promise<HeatmapDay[]> {
   return result;
 }
 
+/**
+ * XP por matéria. Eventos cuja matéria foi apagada ficam com `subjectId` nulo
+ * (ON DELETE SET NULL) e saem deste recorte — continuam somando no total e no
+ * nível, só não têm mais a quem ser atribuídos. O fallback de nome cobre a
+ * corrida de a matéria sumir entre as duas consultas abaixo.
+ */
 export async function getXpBySubject(): Promise<SubjectXp[]> {
   const [grouped, subjects] = await Promise.all([
     prisma.xpEvent.groupBy({

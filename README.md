@@ -12,10 +12,12 @@ React Three Fiber · Recharts.
 - **Dashboard** — grafo interativo estilo Obsidian ligando matérias, tópicos, tarefas, sessões e
   posts. Zoom, arrastar nós, filtro por matéria e painel de detalhes. Acima dele, um resumo
   compacto com nível, estudo na semana e próxima tarefa.
-- **Matérias** — CRUD de matérias, checklist de tópicos da ementa (30 XP cada) e tarefas com
-  prioridade, status e XP.
+- **Matérias** — criar, editar e excluir matérias, checklist de tópicos da ementa (30 XP cada) e
+  tarefas com prioridade, status e XP. Excluir avisa, com números, o que sai em cascata.
 - **Cronômetro** — modo livre e Pomodoro configurável, vinculado a uma matéria; converte tempo em XP.
-- **Jornada** — diário em Markdown com sidebar de navegação, sumário automático e editor com prévia.
+- **Jornada** — diário em Markdown com sidebar de navegação, sumário automático e editor com
+  prévia fiel (é o mesmo renderizador da leitura). Posts podem ser editados e excluídos; o
+  endereço não muda ao renomear o título, para não quebrar links `[[wiki]]` já existentes.
 - **Cérebro** — rede neural 3D que ganha neurônios e sinapses a cada nível, com animação na
   subida. Títulos por faixa (Iniciante → Aprendiz → Estudioso → Mestre), streak de dias
   consecutivos com bônus em marcos, curva de XP acumulado, heatmap de dias estudados,
@@ -23,9 +25,18 @@ React Three Fiber · Recharts.
 
 ## Acesso
 
-App de uso pessoal, protegido por uma senha única definida na env `APP_PASSWORD`. O
-[proxy.ts](proxy.ts) bloqueia todas as páginas e rotas de API até o login, que grava um cookie
-`HttpOnly` assinado com HMAC-SHA256 ([lib/auth.ts](lib/auth.ts)) e vale 30 dias.
+App de uso pessoal, protegido por uma senha única definida na env `APP_PASSWORD`. O login grava um
+cookie `HttpOnly` assinado com HMAC-SHA256 ([lib/auth.ts](lib/auth.ts)) que vale 30 dias.
+
+A checagem acontece em **duas camadas**, e a de dentro é a que vale: cada rota de API chama
+`denyWithoutSession()` e cada página que lê o banco chama `requireSession()`
+([lib/session.ts](lib/session.ts)). O [proxy.ts](proxy.ts) só redireciona cedo — a documentação do
+Next é explícita em não usá-lo como única autenticação, e o matcher de fato tem furos (ignora
+qualquer caminho terminado em `.png`, `.svg` e afins).
+
+Tentativas de login são freadas em memória ([lib/login-throttle.ts](lib/login-throttle.ts)): cinco
+erros do mesmo IP bloqueiam com backoff exponencial de 30s a 15min, e um teto global impede que
+`x-forwarded-for` forjado contorne o limite.
 
 A chave de assinatura deriva da própria senha: **trocar `APP_PASSWORD` derruba todas as sessões**.
 
@@ -45,6 +56,15 @@ Definidas em [lib/xp.ts](lib/xp.ts):
 
 Desmarcar ou excluir uma tarefa/tópico devolve o XP. O total vem de `SUM(XpEvent.amount)` — não
 existe contador separado que possa divergir das linhas de origem.
+
+Excluir uma **matéria**, porém, não apaga o XP dela: os eventos ficam sem vínculo
+(`ON DELETE SET NULL`) e continuam somando no total. O esforço aconteceu, e o nível não regride
+por arquivar uma disciplina do semestre passado — esse XP só deixa de aparecer no breakdown
+por matéria.
+
+A gravação do XP acontece na mesma transação da mutação que a originou, e uma tarefa/tópico só
+pode ter um evento de XP (índice único no banco): concluir com dois cliques rápidos não dobra os
+pontos, e uma falha no meio do caminho não deixa tarefa concluída sem XP.
 
 ## Desenvolvimento
 
@@ -142,5 +162,48 @@ que o Coolify já provisiona.
 
 O seed não roda no deploy. Para popular as matérias em produção, rode `npm run db:seed` uma vez
 com o `DATABASE_URL` de produção.
+
+O container expõe `/api/health` (sem autenticação — só responde se o banco atende ou não) e o
+`HEALTHCHECK` do Dockerfile usa essa rota. O `start-period` de 60s cobre o `migrate deploy` que
+roda antes do servidor subir.
+
+## Backup e restauração
+
+Os dados do app são meses de histórico que não dá para recriar: XP, streak, diário, ementas.
+Eles moram num volume Docker, e **volume não é backup**.
+
+Gerar um backup:
+
+```bash
+DATABASE_URL=<connection string> ./scripts/backup.sh /caminho/dos/backups
+```
+
+O script usa o formato custom do `pg_dump`, confere que o arquivo gerado é legível (`pg_restore
+--list`) e apaga backups com mais de 30 dias (`RETENCAO_DIAS` muda isso). Agende no Coolify como
+Scheduled Task diária, gravando **fora do host** — backup no mesmo disco do banco morre junto com
+ele.
+
+**Teste a restauração antes de precisar dela.** Backup nunca restaurado não é backup:
+
+```bash
+# 1. sobe um Postgres descartável só para o teste
+docker run --rm -d --name restore-teste -e POSTGRES_PASSWORD=teste -p 5434:5432 postgres:18-alpine
+sleep 5
+
+# 2. restaura o dump nele
+createdb -h localhost -p 5434 -U postgres sinapse_teste
+pg_restore -h localhost -p 5434 -U postgres -d sinapse_teste --no-owner /caminho/do/backup.dump
+
+# 3. confere que os dados estão lá de verdade
+psql -h localhost -p 5434 -U postgres -d sinapse_teste \
+  -c 'SELECT (SELECT count(*) FROM "Subject") AS materias,
+             (SELECT count(*) FROM "StudySession") AS sessoes,
+             (SELECT coalesce(sum(amount),0) FROM "XpEvent") AS xp_total;'
+
+# 4. compara com a produção e derruba o descartável
+docker rm -f restore-teste
+```
+
+Se o XP total e a contagem de sessões baterem com o app em produção, o backup presta.
 
 As rotas que leem o banco são todas dinâmicas, então o banco não precisa existir durante o build.

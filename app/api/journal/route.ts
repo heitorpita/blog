@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { readJson } from "@/lib/http";
+import { denyWithoutSession } from "@/lib/session";
 import { slugify } from "@/lib/slug";
 import { parseWikiLinks } from "@/lib/wikilinks";
 
@@ -12,6 +14,9 @@ const createPostSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
+  const denied = await denyWithoutSession();
+  if (denied) return denied;
+
   const subjectId = request.nextUrl.searchParams.get("subjectId");
 
   const posts = await prisma.journalPost.findMany({
@@ -23,13 +28,13 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const parsed = createPostSchema.safeParse(await request.json());
+  const denied = await denyWithoutSession();
+  if (denied) return denied;
 
-  if (!parsed.success) {
-    return Response.json({ error: parsed.error.issues }, { status: 400 });
-  }
+  const body = await readJson(request, createPostSchema);
+  if (!body.ok) return body.response;
 
-  const { title, content, excerpt, subjectId } = parsed.data;
+  const { title, content, excerpt, subjectId } = body.data;
   const baseSlug = slugify(title) || "post";
 
   const existingSlugs = await prisma.journalPost.findMany({

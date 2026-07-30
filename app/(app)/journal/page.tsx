@@ -1,14 +1,14 @@
 import Link from "next/link";
-import { prisma } from "@/lib/db";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { requireSession } from "@/lib/session";
+import { listJournalPosts } from "@/lib/queries/journal";
 import { formatDate } from "@/lib/format";
 
 export default async function JournalPage() {
-  const posts = await prisma.journalPost.findMany({
-    orderBy: { publishedAt: "desc" },
-    include: { subject: { select: { name: true, color: true } } },
-  });
+  await requireSession();
+
+  const posts = await listJournalPosts();
 
   return (
     <div className="space-y-6">

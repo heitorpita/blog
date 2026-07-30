@@ -16,16 +16,36 @@ export function LoginForm() {
     setSubmitting(true);
     setError(null);
 
-    const response = await fetch("/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
+    // Esta tela não usa o `fetchJson` compartilhado de propósito: ele manda para
+    // /login no 401, o que aqui viraria laço infinito. E precisamos do header
+    // Retry-After, que o helper não expõe.
+    let response: Response;
+
+    try {
+      response = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+    } catch {
+      setSubmitting(false);
+      setError("Sem conexão. Verifique a internet e tente de novo.");
+      return;
+    }
 
     setSubmitting(false);
 
     if (!response.ok) {
-      setError(response.status === 401 ? "Senha incorreta." : "Não foi possível entrar.");
+      if (response.status === 429) {
+        const retryAfter = Number(response.headers.get("Retry-After"));
+        setError(
+          Number.isFinite(retryAfter) && retryAfter > 0
+            ? `Muitas tentativas. Tente de novo em ${Math.ceil(retryAfter / 60)} min.`
+            : "Muitas tentativas. Tente de novo mais tarde.",
+        );
+      } else {
+        setError(response.status === 401 ? "Senha incorreta." : "Não foi possível entrar.");
+      }
       setPassword("");
       return;
     }

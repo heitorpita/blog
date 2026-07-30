@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import clsx from "clsx";
-import { Button } from "@/components/ui/button";
+import { buttonClasses } from "@/components/ui/button";
 import { NODE_TYPE_LABEL, type GraphData, type GraphEdge, type GraphNode } from "@/lib/graph-types";
 
 type SimNode = GraphNode & { x?: number; y?: number };
@@ -240,10 +240,11 @@ export function KnowledgeGraph({ data }: { data: GraphData }) {
               </p>
 
               {selected.href && (
-                <Link href={selected.href}>
-                  <Button variant="secondary" className="w-full">
-                    {selected.type === "UNRESOLVED" ? "Criar este post" : "Abrir"}
-                  </Button>
+                <Link
+                  href={selected.href}
+                  className={buttonClasses("secondary", "w-full")}
+                >
+                  {selected.type === "UNRESOLVED" ? "Criar este post" : "Abrir"}
                 </Link>
               )}
             </div>

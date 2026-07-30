@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { readJson } from "@/lib/http";
+import { denyWithoutSession } from "@/lib/session";
 
 const updateSubjectSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
@@ -15,6 +17,9 @@ const updateSubjectSchema = z.object({
 });
 
 export async function GET(_request: NextRequest, ctx: RouteContext<"/api/subjects/[id]">) {
+  const denied = await denyWithoutSession();
+  if (denied) return denied;
+
   const { id } = await ctx.params;
 
   const subject = await prisma.subject.findUnique({
@@ -30,12 +35,12 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/subject
 }
 
 export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/subjects/[id]">) {
-  const { id } = await ctx.params;
-  const parsed = updateSubjectSchema.safeParse(await request.json());
+  const denied = await denyWithoutSession();
+  if (denied) return denied;
 
-  if (!parsed.success) {
-    return Response.json({ error: parsed.error.issues }, { status: 400 });
-  }
+  const { id } = await ctx.params;
+  const body = await readJson(request, updateSubjectSchema);
+  if (!body.ok) return body.response;
 
   if (!(await prisma.subject.findUnique({ where: { id }, select: { id: true } }))) {
     return Response.json({ error: "Matéria não encontrada" }, { status: 404 });
@@ -43,7 +48,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/subjec
 
   const subject = await prisma.subject.update({
     where: { id },
-    data: parsed.data,
+    data: body.data,
     include: { topics: { orderBy: { order: "asc" } } },
   });
 
@@ -51,6 +56,9 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/subjec
 }
 
 export async function DELETE(_request: NextRequest, ctx: RouteContext<"/api/subjects/[id]">) {
+  const denied = await denyWithoutSession();
+  if (denied) return denied;
+
   const { id } = await ctx.params;
 
   if (!(await prisma.subject.findUnique({ where: { id }, select: { id: true } }))) {

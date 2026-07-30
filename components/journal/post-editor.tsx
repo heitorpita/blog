@@ -3,38 +3,30 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Markdown } from "@/components/journal/markdown";
+import { fetchJson, jsonBody } from "@/lib/fetch-json";
 
 type SubjectOption = { id: string; name: string };
 
-function renderPreview(markdown: string) {
-  return markdown
-    .split("\n\n")
-    .map((block) => block.trim())
-    .filter(Boolean)
-    .map((block, index) => {
-      const heading = /^(#{1,4})\s+(.*)$/.exec(block);
-      if (heading) {
-        const level = heading[1].length;
-        const sizes = ["text-2xl", "text-xl", "text-lg", "text-base"];
-        return (
-          <p key={index} className={`font-serif ${sizes[level - 1]} text-foreground`}>
-            {heading[2]}
-          </p>
-        );
-      }
-      return (
-        <p key={index} className="text-sm leading-relaxed text-muted">
-          {block}
-        </p>
-      );
-    });
-}
+/** Presente = editando um post existente; ausente = escrevendo um novo. */
+export type EditingPost = {
+  slug: string;
+  title: string;
+  content: string;
+  subjectId: string | null;
+};
 
-export function PostEditor({ subjects }: { subjects: SubjectOption[] }) {
+export function PostEditor({
+  subjects,
+  post,
+}: {
+  subjects: SubjectOption[];
+  post?: EditingPost;
+}) {
   const router = useRouter();
-  const [title, setTitle] = useState("");
-  const [subjectId, setSubjectId] = useState("");
-  const [content, setContent] = useState("");
+  const [title, setTitle] = useState(post?.title ?? "");
+  const [subjectId, setSubjectId] = useState(post?.subjectId ?? "");
+  const [content, setContent] = useState(post?.content ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,21 +35,42 @@ export function PostEditor({ subjects }: { subjects: SubjectOption[] }) {
     setSaving(true);
     setError(null);
 
-    const response = await fetch("/api/journal", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, content, subjectId: subjectId || null }),
-    });
+    const payload = { title, content, subjectId: subjectId || null };
+
+    // Editar mantém o slug de propósito: ele já pode estar em links [[wiki]] de
+    // outros posts e em endereços salvos. Renomear o título não deve quebrá-los.
+    const result = post
+      ? await fetchJson<{ slug: string }>(`/api/journal/${post.slug}`, jsonBody("PATCH", payload))
+      : await fetchJson<{ slug: string }>("/api/journal", jsonBody("POST", payload));
 
     setSaving(false);
 
-    if (!response.ok) {
-      setError("Não foi possível salvar o post.");
+    if (!result.ok) {
+      setError(result.message);
       return;
     }
 
-    const post = await response.json();
-    router.push(`/journal/${post.slug}`);
+    router.push(`/journal/${result.data.slug}`);
+    router.refresh();
+  }
+
+  async function remove() {
+    if (!post) return;
+
+    if (!window.confirm(`Excluir "${post.title}"? Não dá para desfazer.`)) return;
+
+    setSaving(true);
+    setError(null);
+
+    const result = await fetchJson(`/api/journal/${post.slug}`, jsonBody("DELETE"));
+
+    if (!result.ok) {
+      setSaving(false);
+      setError(result.message);
+      return;
+    }
+
+    router.push("/journal");
     router.refresh();
   }
 
@@ -92,20 +105,40 @@ export function PostEditor({ subjects }: { subjects: SubjectOption[] }) {
           rows={20}
           className="rounded-md border border-border bg-surface px-3 py-2 font-mono text-sm text-foreground outline-none placeholder:text-muted focus:border-accent"
         />
-        <div className="min-h-40 space-y-3 overflow-auto rounded-md border border-border bg-surface p-4">
+        {/* Mesmo componente da leitura do post: o que aparece aqui é exatamente
+            o que vai ser publicado. */}
+        <div className="prose prose-journal min-h-40 max-w-none overflow-auto rounded-md border border-border bg-surface p-4 prose-headings:font-serif prose-pre:bg-surface-raised">
           {content.trim() ? (
-            renderPreview(content)
+            <Markdown>{content}</Markdown>
           ) : (
             <p className="text-sm text-muted">A prévia aparece aqui.</p>
           )}
         </div>
       </div>
 
-      {error && <p className="text-sm text-rose-400">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-rose-400">
+          {error}
+        </p>
+      )}
 
-      <Button type="submit" disabled={saving || !title.trim() || !content.trim()}>
-        {saving ? "Publicando…" : "Publicar"}
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="submit" disabled={saving || !title.trim() || !content.trim()}>
+          {saving ? "Salvando…" : post ? "Salvar alterações" : "Publicar"}
+        </Button>
+
+        {post && (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={remove}
+            disabled={saving}
+            className="ml-auto text-rose-400 hover:bg-rose-500/10 hover:text-rose-300"
+          >
+            Excluir post
+          </Button>
+        )}
+      </div>
     </form>
   );
 }

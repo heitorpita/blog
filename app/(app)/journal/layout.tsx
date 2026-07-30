@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { prisma } from "@/lib/db";
-import { Button } from "@/components/ui/button";
+import { buttonClasses } from "@/components/ui/button";
+import { requireSession } from "@/lib/session";
+import { listJournalPosts } from "@/lib/queries/journal";
 import { formatDate } from "@/lib/format";
 
 export default async function JournalLayout({
@@ -8,20 +9,20 @@ export default async function JournalLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const posts = await prisma.journalPost.findMany({
-    orderBy: { publishedAt: "desc" },
-    include: { subject: { select: { name: true, color: true } } },
-  });
+  await requireSession();
+
+  const posts = await listJournalPosts();
 
   return (
     <div className="flex flex-col gap-8 lg:flex-row">
       <nav className="lg:w-56 lg:shrink-0">
         <div className="flex items-center justify-between gap-2">
           <h2 className="font-serif text-lg text-foreground">Jornada</h2>
-          <Link href="/journal/new">
-            <Button variant="secondary" className="px-2.5 py-1 text-xs">
-              Novo post
-            </Button>
+          <Link
+            href="/journal/new"
+            className={buttonClasses("secondary", "px-2.5 py-1 text-xs")}
+          >
+            Novo post
           </Link>
         </div>
 

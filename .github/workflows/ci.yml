@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `postinstall` roda `prisma generate`, então o client sai daqui pronto.
+      # Nenhum passo abaixo precisa de banco: todas as rotas são dinâmicas e o
+      # build não consulta o Postgres.
+      - run: npm ci
+
+      # Os tipos de rota (`RouteContext<...>`, `PageProps<...>`) são gerados, não
+      # escritos à mão — sem este passo o tsc falha em qualquer rota dinâmica.
+      - run: npx next typegen
+
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
