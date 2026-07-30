@@ -14,8 +14,24 @@ const BrainScene = dynamic(
 export function BrainPanel({ totalXp, streak }: { totalXp: number; streak: number }) {
   const [open, setOpen] = useState(false);
   const [levelUp, setLevelUp] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const sceneRef = useRef<HTMLDivElement>(null);
   const { level, title, xp, xpIntoLevel, xpNeededForNext, progress, percent } =
     xpProgress(totalXp);
+
+  // O painel vive no shell, ou seja, em TODA rota. Sem isto o `<Canvas>` mantinha
+  // um loop de requestAnimationFrame girando a rede neural para sempre — inclusive
+  // no celular, onde o painel fica com `display:none`, e enquanto o usuário só lê
+  // um post. Elemento escondido ou fora da tela não intersecta, então o canvas
+  // desmonta sozinho e para de queimar GPU e bateria.
+  useEffect(() => {
+    const element = sceneRef.current;
+    if (!element) return;
+
+    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   // Compara com o nível do render anterior para comemorar só na transição —
   // o primeiro render nunca conta como subida de nível.
@@ -46,8 +62,11 @@ export function BrainPanel({ totalXp, streak }: { totalXp: number; streak: numbe
       </button>
 
       <div className={clsx("px-5 pb-6 md:block md:pt-6", open ? "block" : "hidden")}>
-        <div className="relative h-56 rounded-lg border border-border bg-background">
-          <BrainScene level={level} levelUp={levelUp} />
+        <div
+          ref={sceneRef}
+          className="relative h-56 rounded-lg border border-border bg-background"
+        >
+          {visible && <BrainScene level={level} levelUp={levelUp} />}
 
           {levelUp && (
             <div className="pointer-events-none absolute inset-x-0 top-3 text-center">

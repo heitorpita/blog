@@ -37,4 +37,9 @@ COPY --from=migrator /migrate /migrate
 
 EXPOSE 3000
 
+# `start-period` cobre o tempo do `migrate deploy` antes do servidor subir: sem
+# ele o container seria marcado como doente logo na largada.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
 CMD ["sh", "-c", "cd /migrate && ./node_modules/.bin/prisma migrate deploy && cd /app && node server.js"]

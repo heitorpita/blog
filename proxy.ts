@@ -28,8 +28,10 @@ export function proxy(request: NextRequest) {
   return NextResponse.redirect(loginUrl);
 }
 
+// `api/health` fica de fora porque quem chama é o orquestrador do container, que
+// não tem cookie — e a rota não devolve dado nenhum, só se o banco responde.
 export const config = {
   matcher: [
-    "/((?!login(?:/|$)|api/login(?:/|$)|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!login(?:/|$)|api/login(?:/|$)|api/health(?:/|$)|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

@@ -156,4 +156,47 @@ que o Coolify já provisiona.
 O seed não roda no deploy. Para popular as matérias em produção, rode `npm run db:seed` uma vez
 com o `DATABASE_URL` de produção.
 
+O container expõe `/api/health` (sem autenticação — só responde se o banco atende ou não) e o
+`HEALTHCHECK` do Dockerfile usa essa rota. O `start-period` de 60s cobre o `migrate deploy` que
+roda antes do servidor subir.
+
+## Backup e restauração
+
+Os dados do app são meses de histórico que não dá para recriar: XP, streak, diário, ementas.
+Eles moram num volume Docker, e **volume não é backup**.
+
+Gerar um backup:
+
+```bash
+DATABASE_URL=<connection string> ./scripts/backup.sh /caminho/dos/backups
+```
+
+O script usa o formato custom do `pg_dump`, confere que o arquivo gerado é legível (`pg_restore
+--list`) e apaga backups com mais de 30 dias (`RETENCAO_DIAS` muda isso). Agende no Coolify como
+Scheduled Task diária, gravando **fora do host** — backup no mesmo disco do banco morre junto com
+ele.
+
+**Teste a restauração antes de precisar dela.** Backup nunca restaurado não é backup:
+
+```bash
+# 1. sobe um Postgres descartável só para o teste
+docker run --rm -d --name restore-teste -e POSTGRES_PASSWORD=teste -p 5434:5432 postgres:18-alpine
+sleep 5
+
+# 2. restaura o dump nele
+createdb -h localhost -p 5434 -U postgres sinapse_teste
+pg_restore -h localhost -p 5434 -U postgres -d sinapse_teste --no-owner /caminho/do/backup.dump
+
+# 3. confere que os dados estão lá de verdade
+psql -h localhost -p 5434 -U postgres -d sinapse_teste \
+  -c 'SELECT (SELECT count(*) FROM "Subject") AS materias,
+             (SELECT count(*) FROM "StudySession") AS sessoes,
+             (SELECT coalesce(sum(amount),0) FROM "XpEvent") AS xp_total;'
+
+# 4. compara com a produção e derruba o descartável
+docker rm -f restore-teste
+```
+
+Se o XP total e a contagem de sessões baterem com o app em produção, o backup presta.
+
 As rotas que leem o banco são todas dinâmicas, então o banco não precisa existir durante o build.
