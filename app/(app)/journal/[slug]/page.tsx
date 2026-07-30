@@ -4,10 +4,13 @@ import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
 import { prisma } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
+import { requireSession } from "@/lib/session";
 import { extractToc } from "@/lib/toc";
 import { formatDate } from "@/lib/format";
 
 export default async function JournalPostPage({ params }: PageProps<"/journal/[slug]">) {
+  await requireSession();
+
   const { slug } = await params;
 
   const post = await prisma.journalPost.findUnique({

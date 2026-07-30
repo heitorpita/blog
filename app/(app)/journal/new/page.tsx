@@ -1,7 +1,10 @@
 import { prisma } from "@/lib/db";
 import { PostEditor } from "@/components/journal/post-editor";
+import { requireSession } from "@/lib/session";
 
 export default async function NewJournalPostPage() {
+  await requireSession();
+
   const subjects = await prisma.subject.findMany({
     orderBy: { name: "asc" },
     select: { id: true, name: true },

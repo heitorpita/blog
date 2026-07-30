@@ -25,7 +25,16 @@ export function LoginForm() {
     setSubmitting(false);
 
     if (!response.ok) {
-      setError(response.status === 401 ? "Senha incorreta." : "Não foi possível entrar.");
+      if (response.status === 429) {
+        const retryAfter = Number(response.headers.get("Retry-After"));
+        setError(
+          Number.isFinite(retryAfter) && retryAfter > 0
+            ? `Muitas tentativas. Tente de novo em ${Math.ceil(retryAfter / 60)} min.`
+            : "Muitas tentativas. Tente de novo mais tarde.",
+        );
+      } else {
+        setError(response.status === 401 ? "Senha incorreta." : "Não foi possível entrar.");
+      }
       setPassword("");
       return;
     }

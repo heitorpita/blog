@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { KnowledgeGraph } from "@/components/graph/knowledge-graph";
+import { requireSession } from "@/lib/session";
 import { getTotalXp } from "@/lib/xp-ledger";
 import { buildGraph } from "@/lib/graph";
 import { xpProgress } from "@/lib/xp";
@@ -24,6 +25,8 @@ async function findMinutesThisWeek() {
 }
 
 export default async function DashboardPage() {
+  await requireSession();
+
   const [totalXp, weekMinutes, nextTask, graph] = await Promise.all([
     getTotalXp(),
     findMinutesThisWeek(),

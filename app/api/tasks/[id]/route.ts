@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { readJson } from "@/lib/http";
+import { denyWithoutSession } from "@/lib/session";
 import { recordXp, revokeXp } from "@/lib/xp-ledger";
 
 const updateTaskSchema = z.object({
@@ -12,12 +14,12 @@ const updateTaskSchema = z.object({
 });
 
 export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/tasks/[id]">) {
-  const { id } = await ctx.params;
-  const parsed = updateTaskSchema.safeParse(await request.json());
+  const denied = await denyWithoutSession();
+  if (denied) return denied;
 
-  if (!parsed.success) {
-    return Response.json({ error: parsed.error.issues }, { status: 400 });
-  }
+  const { id } = await ctx.params;
+  const body = await readJson(request, updateTaskSchema);
+  if (!body.ok) return body.response;
 
   const existing = await prisma.task.findUnique({ where: { id } });
 
@@ -25,34 +27,54 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/tasks/
     return Response.json({ error: "Tarefa não encontrada" }, { status: 404 });
   }
 
-  const nextStatus = parsed.data.status ?? existing.status;
   const wasDone = existing.status === "DONE";
+  const nextStatus = body.data.status ?? existing.status;
   const isDone = nextStatus === "DONE";
 
-  const task = await prisma.task.update({
-    where: { id },
-    data: {
-      ...parsed.data,
-      completedAt: isDone ? (existing.completedAt ?? new Date()) : null,
-    },
-  });
-
-  if (!wasDone && isDone) {
-    await recordXp({
-      source: "TASK",
-      amount: task.xp,
-      description: `Tarefa concluída: ${task.title}`,
-      subjectId: task.subjectId,
-      taskId: task.id,
+  // Mutação e XP na mesma transação: a tarefa nunca fica concluída sem o evento
+  // correspondente, nem o contrário.
+  const task = await prisma.$transaction(async (tx) => {
+    // Compare-and-swap: o `where` exige o status que acabamos de ler, então de
+    // dois PATCH concorrentes (duplo clique no checkbox) só um encontra a linha
+    // para atualizar. O segundo vê `count: 0` e não concede XP de novo.
+    const claimed = await tx.task.updateMany({
+      where: { id, status: existing.status },
+      data: {
+        ...body.data,
+        status: nextStatus,
+        completedAt: isDone ? (existing.completedAt ?? new Date()) : null,
+      },
     });
-  } else if (wasDone && !isDone) {
-    await revokeXp({ taskId: task.id });
-  }
+
+    const updated = await tx.task.findUniqueOrThrow({ where: { id } });
+
+    if (claimed.count === 0) return updated;
+
+    if (!wasDone && isDone) {
+      await recordXp(
+        {
+          source: "TASK",
+          amount: updated.xp,
+          description: `Tarefa concluída: ${updated.title}`,
+          subjectId: updated.subjectId,
+          taskId: updated.id,
+        },
+        tx,
+      );
+    } else if (wasDone && !isDone) {
+      await revokeXp({ taskId: updated.id }, tx);
+    }
+
+    return updated;
+  });
 
   return Response.json(task);
 }
 
 export async function DELETE(_request: NextRequest, ctx: RouteContext<"/api/tasks/[id]">) {
+  const denied = await denyWithoutSession();
+  if (denied) return denied;
+
   const { id } = await ctx.params;
   const existing = await prisma.task.findUnique({ where: { id } });
 

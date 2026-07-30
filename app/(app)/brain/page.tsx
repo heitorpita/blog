@@ -5,6 +5,7 @@ import { XpChart } from "@/components/brain/xp-chart";
 import { StudyHeatmap } from "@/components/brain/study-heatmap";
 import { SubjectBreakdown } from "@/components/brain/subject-breakdown";
 import { EventFeed } from "@/components/brain/event-feed";
+import { requireSession } from "@/lib/session";
 import { getTotalXp } from "@/lib/xp-ledger";
 import {
   getRecentXpEvents,
@@ -17,6 +18,8 @@ import { LEVEL_TITLES, STREAK_MILESTONES, xpForLevel, xpProgress } from "@/lib/x
 import { formatMinutes } from "@/lib/format";
 
 export default async function BrainPage() {
+  await requireSession();
+
   const [totalXp, streak, xpOverTime, heatmap, bySubject, events, sessions] =
     await Promise.all([
       getTotalXp(),

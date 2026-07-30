@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { readJson } from "@/lib/http";
+import { denyWithoutSession } from "@/lib/session";
 import { slugify } from "@/lib/slug";
 
 const createSubjectSchema = z.object({
@@ -17,6 +19,9 @@ const createSubjectSchema = z.object({
 });
 
 export async function GET() {
+  const denied = await denyWithoutSession();
+  if (denied) return denied;
+
   const subjects = await prisma.subject.findMany({
     orderBy: { name: "asc" },
     include: { topics: { orderBy: { order: "asc" } } },
@@ -26,13 +31,13 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const parsed = createSubjectSchema.safeParse(await request.json());
+  const denied = await denyWithoutSession();
+  if (denied) return denied;
 
-  if (!parsed.success) {
-    return Response.json({ error: parsed.error.issues }, { status: 400 });
-  }
+  const body = await readJson(request, createSubjectSchema);
+  if (!body.ok) return body.response;
 
-  const { topics, ...subject } = parsed.data;
+  const { topics, ...subject } = body.data;
   const baseId = slugify(subject.name) || slugify(subject.code) || "materia";
 
   const taken = new Set(

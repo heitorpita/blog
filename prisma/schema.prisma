@@ -162,6 +162,12 @@ model XpEvent {
   session   StudySession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   sessionId String?
 
+  // Uma tarefa/tópico concede XP no máximo uma vez. É a trava definitiva contra
+  // duplo clique e contra qualquer caminho de código futuro que esqueça a
+  // checagem: no Postgres um índice único trata NULLs como distintos, então
+  // eventos de outras origens (sessão, streak) continuam livres.
+  @@unique([taskId])
+  @@unique([topicId])
   @@index([createdAt])
   @@index([subjectId])
 }

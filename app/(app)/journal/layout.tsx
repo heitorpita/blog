@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { Button } from "@/components/ui/button";
+import { requireSession } from "@/lib/session";
 import { formatDate } from "@/lib/format";
 
 export default async function JournalLayout({
@@ -8,6 +9,8 @@ export default async function JournalLayout({
 }: {
   children: React.ReactNode;
 }) {
+  await requireSession();
+
   const posts = await prisma.journalPost.findMany({
     orderBy: { publishedAt: "desc" },
     include: { subject: { select: { name: true, color: true } } },

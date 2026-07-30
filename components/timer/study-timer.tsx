@@ -1,14 +1,22 @@
 "use client";
 
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { XP_PER_MINUTE_STUDIED } from "@/lib/xp";
-
-type Mode = "FREE" | "POMODORO";
-type Phase = "FOCUS" | "BREAK";
+import {
+  elapsedSeconds,
+  getTimerServerSnapshot,
+  getTimerSnapshot,
+  pendingMinutes as pendingMinutesOf,
+  phaseSeconds,
+  resetRun,
+  rollPomodoro,
+  setTimerState,
+  subscribeToTimer,
+} from "@/components/timer/timer-store";
 
 type SubjectOption = { id: string; name: string; color: string };
 
@@ -21,59 +29,61 @@ function formatClock(seconds: number) {
 
 export function StudyTimer({ subjects }: { subjects: SubjectOption[] }) {
   const router = useRouter();
-  const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? "");
-  const [mode, setMode] = useState<Mode>("FREE");
-  const [focusMinutes, setFocusMinutes] = useState(25);
-  const [breakMinutes, setBreakMinutes] = useState(5);
-  const [phase, setPhase] = useState<Phase>("FOCUS");
-  const [running, setRunning] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  const [banked, setBanked] = useState(0);
+  const state = useSyncExternalStore(
+    subscribeToTimer,
+    getTimerSnapshot,
+    getTimerServerSnapshot,
+  );
+
+  // Só existe para repintar o relógio; o tempo real vem de `state.startedAt`.
+  const [now, setNow] = useState(() => Date.now());
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-
-  const phaseLength = (phase === "FOCUS" ? focusMinutes : breakMinutes) * 60;
-  const remaining = phaseLength - elapsed;
-
-  const onTick = useEffectEvent(() => {
-    const next = elapsed + 1;
-
-    if (mode !== "POMODORO" || next < phaseLength) {
-      setElapsed(next);
-      return;
-    }
-
-    if (phase === "FOCUS") {
-      setBanked((value) => value + focusMinutes);
-      setPhase("BREAK");
-      setMessage(`Foco concluído! ${focusMinutes} min guardados. Hora da pausa.`);
-    } else {
-      setPhase("FOCUS");
-      setMessage("Pausa concluída. Bora pro próximo ciclo.");
-    }
-    setElapsed(0);
-  });
 
   useEffect(() => {
-    if (!running) return;
+    if (state.startedAt === null) return;
 
-    const id = setInterval(onTick, 1000);
+    const id = setInterval(() => {
+      const tick = Date.now();
+      setNow(tick);
+      // Fecha as fases vencidas aqui, onde o tempo de fato avança. Devolve o
+      // mesmo objeto quando não há nada a fechar, então não gera renderização.
+      setTimerState((current) => rollPomodoro(current, tick));
+    }, 500);
+
     return () => clearInterval(id);
-  }, [running]);
+  }, [state.startedAt]);
 
-  function reset() {
-    setRunning(false);
-    setElapsed(0);
-    setBanked(0);
-    setPhase("FOCUS");
+  // A matéria guardada pode ter sido apagada desde a última sessão; resolver na
+  // renderização cobre isso e o caso de não haver nada guardado.
+  const subjectId =
+    state.subjectId && subjects.some((subject) => subject.id === state.subjectId)
+      ? state.subjectId
+      : (subjects[0]?.id ?? "");
+
+  const elapsed = elapsedSeconds(state, now);
+  const phaseLength = phaseSeconds(state);
+  const running = state.startedAt !== null;
+  const pendingMinutes = pendingMinutesOf(state, now);
+  const display = state.mode === "FREE" ? elapsed : Math.max(phaseLength - elapsed, 0);
+
+  function toggleRunning() {
+    setTimerState((current) =>
+      current.startedAt === null
+        ? { ...current, startedAt: Date.now(), notice: null }
+        : {
+            ...current,
+            startedAt: null,
+            carried: elapsedSeconds(current, Date.now()),
+          },
+    );
   }
-
-  const pendingMinutes =
-    banked + (mode === "FREE" || phase === "FOCUS" ? Math.floor(elapsed / 60) : 0);
 
   async function finish() {
     if (!subjectId || pendingMinutes < 1) {
-      setMessage("Estude pelo menos 1 minuto antes de salvar.");
+      setTimerState((current) => ({
+        ...current,
+        notice: "Estude pelo menos 1 minuto antes de salvar.",
+      }));
       return;
     }
 
@@ -81,29 +91,39 @@ export function StudyTimer({ subjects }: { subjects: SubjectOption[] }) {
     const response = await fetch("/api/sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subjectId, mode, durationMinutes: pendingMinutes }),
+      body: JSON.stringify({
+        subjectId,
+        mode: state.mode,
+        durationMinutes: pendingMinutes,
+      }),
     });
     setSaving(false);
 
     if (!response.ok) {
-      setMessage("Não foi possível salvar a sessão.");
+      setTimerState((current) => ({
+        ...current,
+        notice: "Não foi possível salvar a sessão.",
+      }));
       return;
     }
 
     const session = await response.json();
-    setMessage(`Sessão salva: ${pendingMinutes} min · +${session.xpEarned} XP`);
-    reset();
+
+    setTimerState((current) => ({
+      ...resetRun(current),
+      notice: `Sessão salva: ${pendingMinutes} min · +${session.xpEarned} XP`,
+    }));
     router.refresh();
   }
-
-  const display = mode === "FREE" ? elapsed : Math.max(remaining, 0);
 
   return (
     <Card className="space-y-6">
       <div className="flex flex-wrap gap-3">
         <select
           value={subjectId}
-          onChange={(event) => setSubjectId(event.target.value)}
+          onChange={(event) =>
+            setTimerState((current) => ({ ...current, subjectId: event.target.value }))
+          }
           className="min-w-48 flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
         >
           {subjects.map((subject) => (
@@ -118,13 +138,12 @@ export function StudyTimer({ subjects }: { subjects: SubjectOption[] }) {
             <button
               key={option}
               type="button"
-              onClick={() => {
-                setMode(option);
-                reset();
-              }}
+              onClick={() =>
+                setTimerState((current) => ({ ...resetRun(current), mode: option }))
+              }
               className={clsx(
                 "rounded px-3 py-1.5 text-sm transition-colors",
-                mode === option
+                state.mode === option
                   ? "bg-surface-raised text-foreground"
                   : "text-muted hover:text-foreground",
               )}
@@ -135,7 +154,7 @@ export function StudyTimer({ subjects }: { subjects: SubjectOption[] }) {
         </div>
       </div>
 
-      {mode === "POMODORO" && (
+      {state.mode === "POMODORO" && (
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-xs text-muted">
             Foco (min)
@@ -143,8 +162,13 @@ export function StudyTimer({ subjects }: { subjects: SubjectOption[] }) {
               type="number"
               min={1}
               max={120}
-              value={focusMinutes}
-              onChange={(event) => setFocusMinutes(Number(event.target.value))}
+              value={state.focusMinutes}
+              onChange={(event) =>
+                setTimerState((current) => ({
+                  ...current,
+                  focusMinutes: Number(event.target.value) || 0,
+                }))
+              }
               className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
             />
           </label>
@@ -154,8 +178,13 @@ export function StudyTimer({ subjects }: { subjects: SubjectOption[] }) {
               type="number"
               min={1}
               max={60}
-              value={breakMinutes}
-              onChange={(event) => setBreakMinutes(Number(event.target.value))}
+              value={state.breakMinutes}
+              onChange={(event) =>
+                setTimerState((current) => ({
+                  ...current,
+                  breakMinutes: Number(event.target.value) || 0,
+                }))
+              }
               className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
             />
           </label>
@@ -163,9 +192,9 @@ export function StudyTimer({ subjects }: { subjects: SubjectOption[] }) {
       )}
 
       <div className="text-center">
-        {mode === "POMODORO" && (
+        {state.mode === "POMODORO" && (
           <p className="text-xs uppercase tracking-wide text-muted">
-            {phase === "FOCUS" ? "Foco" : "Pausa"}
+            {state.phase === "FOCUS" ? "Foco" : "Pausa"}
           </p>
         )}
         <p className="font-serif text-6xl tabular-nums text-foreground">
@@ -177,10 +206,8 @@ export function StudyTimer({ subjects }: { subjects: SubjectOption[] }) {
       </div>
 
       <div className="flex flex-wrap justify-center gap-3">
-        <Button onClick={() => setRunning((value) => !value)}>
-          {running ? "Pausar" : "Iniciar"}
-        </Button>
-        <Button variant="secondary" onClick={reset}>
+        <Button onClick={toggleRunning}>{running ? "Pausar" : "Iniciar"}</Button>
+        <Button variant="secondary" onClick={() => setTimerState(resetRun)}>
           Zerar
         </Button>
         <Button variant="secondary" onClick={finish} disabled={saving || pendingMinutes < 1}>
@@ -188,7 +215,7 @@ export function StudyTimer({ subjects }: { subjects: SubjectOption[] }) {
         </Button>
       </div>
 
-      {message && <p className="text-center text-sm text-accent">{message}</p>}
+      {state.notice && <p className="text-center text-sm text-accent">{state.notice}</p>}
     </Card>
   );
 }

@@ -3,9 +3,12 @@ import { prisma } from "@/lib/db";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { TaskManager } from "@/components/tasks/task-manager";
 import { TopicChecklist } from "@/components/topics/topic-checklist";
+import { requireSession } from "@/lib/session";
 import { formatMinutes } from "@/lib/format";
 
 export default async function SubjectPage({ params }: PageProps<"/subjects/[id]">) {
+  await requireSession();
+
   const { id } = await params;
 
   const subject = await prisma.subject.findUnique({

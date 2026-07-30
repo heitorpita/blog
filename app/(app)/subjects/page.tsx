@@ -3,9 +3,12 @@ import { prisma } from "@/lib/db";
 import { Card } from "@/components/ui/card";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { SubjectCreator } from "@/components/subjects/subject-creator";
+import { requireSession } from "@/lib/session";
 import { formatMinutes } from "@/lib/format";
 
 export default async function SubjectsPage() {
+  await requireSession();
+
   const subjects = await prisma.subject.findMany({
     orderBy: { name: "asc" },
     include: {

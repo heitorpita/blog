@@ -23,9 +23,18 @@ React Three Fiber · Recharts.
 
 ## Acesso
 
-App de uso pessoal, protegido por uma senha única definida na env `APP_PASSWORD`. O
-[proxy.ts](proxy.ts) bloqueia todas as páginas e rotas de API até o login, que grava um cookie
-`HttpOnly` assinado com HMAC-SHA256 ([lib/auth.ts](lib/auth.ts)) e vale 30 dias.
+App de uso pessoal, protegido por uma senha única definida na env `APP_PASSWORD`. O login grava um
+cookie `HttpOnly` assinado com HMAC-SHA256 ([lib/auth.ts](lib/auth.ts)) que vale 30 dias.
+
+A checagem acontece em **duas camadas**, e a de dentro é a que vale: cada rota de API chama
+`denyWithoutSession()` e cada página que lê o banco chama `requireSession()`
+([lib/session.ts](lib/session.ts)). O [proxy.ts](proxy.ts) só redireciona cedo — a documentação do
+Next é explícita em não usá-lo como única autenticação, e o matcher de fato tem furos (ignora
+qualquer caminho terminado em `.png`, `.svg` e afins).
+
+Tentativas de login são freadas em memória ([lib/login-throttle.ts](lib/login-throttle.ts)): cinco
+erros do mesmo IP bloqueiam com backoff exponencial de 30s a 15min, e um teto global impede que
+`x-forwarded-for` forjado contorne o limite.
 
 A chave de assinatura deriva da própria senha: **trocar `APP_PASSWORD` derruba todas as sessões**.
 
@@ -45,6 +54,10 @@ Definidas em [lib/xp.ts](lib/xp.ts):
 
 Desmarcar ou excluir uma tarefa/tópico devolve o XP. O total vem de `SUM(XpEvent.amount)` — não
 existe contador separado que possa divergir das linhas de origem.
+
+A gravação do XP acontece na mesma transação da mutação que a originou, e uma tarefa/tópico só
+pode ter um evento de XP (índice único no banco): concluir com dois cliques rápidos não dobra os
+pontos, e uma falha no meio do caminho não deixa tarefa concluída sem XP.
 
 ## Desenvolvimento
 

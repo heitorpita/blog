@@ -2,9 +2,12 @@ import { prisma } from "@/lib/db";
 import { Card } from "@/components/ui/card";
 import { StudyTimer } from "@/components/timer/study-timer";
 import { HoursChart } from "@/components/timer/hours-chart";
+import { requireSession } from "@/lib/session";
 import { formatDate, formatMinutes } from "@/lib/format";
 
 export default async function TimerPage() {
+  await requireSession();
+
   const [subjects, sessions] = await Promise.all([
     prisma.subject.findMany({
       orderBy: { name: "asc" },
