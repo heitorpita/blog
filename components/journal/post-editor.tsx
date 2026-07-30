@@ -3,33 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Markdown } from "@/components/journal/markdown";
 import { fetchJson, jsonBody } from "@/lib/fetch-json";
 
 type SubjectOption = { id: string; name: string };
-
-function renderPreview(markdown: string) {
-  return markdown
-    .split("\n\n")
-    .map((block) => block.trim())
-    .filter(Boolean)
-    .map((block, index) => {
-      const heading = /^(#{1,4})\s+(.*)$/.exec(block);
-      if (heading) {
-        const level = heading[1].length;
-        const sizes = ["text-2xl", "text-xl", "text-lg", "text-base"];
-        return (
-          <p key={index} className={`font-serif ${sizes[level - 1]} text-foreground`}>
-            {heading[2]}
-          </p>
-        );
-      }
-      return (
-        <p key={index} className="text-sm leading-relaxed text-muted">
-          {block}
-        </p>
-      );
-    });
-}
 
 export function PostEditor({ subjects }: { subjects: SubjectOption[] }) {
   const router = useRouter();
@@ -91,9 +68,11 @@ export function PostEditor({ subjects }: { subjects: SubjectOption[] }) {
           rows={20}
           className="rounded-md border border-border bg-surface px-3 py-2 font-mono text-sm text-foreground outline-none placeholder:text-muted focus:border-accent"
         />
-        <div className="min-h-40 space-y-3 overflow-auto rounded-md border border-border bg-surface p-4">
+        {/* Mesmo componente da leitura do post: o que aparece aqui é exatamente
+            o que vai ser publicado. */}
+        <div className="prose prose-journal min-h-40 max-w-none overflow-auto rounded-md border border-border bg-surface p-4 prose-headings:font-serif prose-pre:bg-surface-raised">
           {content.trim() ? (
-            renderPreview(content)
+            <Markdown>{content}</Markdown>
           ) : (
             <p className="text-sm text-muted">A prévia aparece aqui.</p>
           )}

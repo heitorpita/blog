@@ -1,9 +1,7 @@
 import { notFound } from "next/navigation";
-import { MDXRemote } from "next-mdx-remote/rsc";
-import rehypeSlug from "rehype-slug";
-import remarkGfm from "remark-gfm";
 import { prisma } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
+import { Markdown } from "@/components/journal/markdown";
 import { requireSession } from "@/lib/session";
 import { extractToc } from "@/lib/toc";
 import { formatDate } from "@/lib/format";
@@ -63,15 +61,7 @@ export default async function JournalPostPage({ params }: PageProps<"/journal/[s
         </header>
 
         <div className="prose prose-journal max-w-none prose-headings:font-serif prose-pre:bg-surface-raised">
-          <MDXRemote
-            source={post.content}
-            options={{
-              mdxOptions: {
-                remarkPlugins: [remarkGfm],
-                rehypePlugins: [rehypeSlug],
-              },
-            }}
-          />
+          <Markdown>{post.content}</Markdown>
         </div>
       </div>
     </article>

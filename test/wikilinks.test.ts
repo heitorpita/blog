@@ -86,9 +86,21 @@ test("título dentro de bloco de código não entra no sumário", () => {
   );
 });
 
-test("slug do sumário bate com o slugify do texto", () => {
+test("slug do sumário PRESERVA acento, para casar com o id do rehype-slug", () => {
+  // Regressão real: o sumário usava lib/slug.ts (que tira acento) enquanto o
+  // rehype-slug gerava id com acento. Num app em português, quase todo link do
+  // sumário apontava para uma âncora inexistente.
   const [entrada] = extractToc("## Integrais Impróprias\n");
-  assert.equal(entrada.slug, slugify("Integrais Impróprias"));
+  assert.equal(entrada.slug, "user-content-integrais-impróprias");
+  assert.notEqual(entrada.slug, slugify("Integrais Impróprias"));
+});
+
+test("títulos repetidos ganham sufixo, como o rehype-slug faz", () => {
+  const entradas = extractToc("## Limites\n### Detalhe\n## Limites\n");
+  assert.deepEqual(
+    entradas.map((e) => e.slug),
+    ["user-content-limites", "user-content-detalhe", "user-content-limites-1"],
+  );
 });
 
 test("marcação inline é removida do texto do sumário", () => {
