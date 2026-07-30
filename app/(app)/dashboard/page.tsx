@@ -5,29 +5,19 @@ import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { KnowledgeGraph } from "@/components/graph/knowledge-graph";
 import { requireSession } from "@/lib/session";
+import { getStudyMinutesInLastDays } from "@/lib/queries/study-sessions";
 import { PRIORITY_LABEL, PRIORITY_TONE } from "@/lib/labels";
 import { getTotalXp } from "@/lib/xp-ledger";
 import { buildGraph } from "@/lib/graph";
 import { xpProgress } from "@/lib/xp";
 import { formatMinutes } from "@/lib/format";
 
-async function findMinutesThisWeek() {
-  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
-  const sessions = await prisma.studySession.findMany({
-    where: { endedAt: { gte: weekAgo } },
-    select: { durationMinutes: true },
-  });
-
-  return sessions.reduce((sum, session) => sum + session.durationMinutes, 0);
-}
-
 export default async function DashboardPage() {
   await requireSession();
 
   const [totalXp, weekMinutes, nextTask, graph] = await Promise.all([
     getTotalXp(),
-    findMinutesThisWeek(),
+    getStudyMinutesInLastDays(7),
     prisma.task.findFirst({
       where: { status: { not: "DONE" } },
       orderBy: [{ priority: "desc" }, { createdAt: "asc" }],

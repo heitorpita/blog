@@ -17,6 +17,7 @@ type XpEventInput = {
   taskId?: string | null;
   topicId?: string | null;
   sessionId?: string | null;
+  milestoneDays?: number | null;
 };
 
 /** Registra XP no ledger. O total do personagem é sempre a soma dos eventos. */
@@ -47,21 +48,36 @@ export async function revokeXp(
 }
 
 /**
- * Concede o bônus de um marco de streak, se ainda não foi concedido.
- * O próprio evento é o registro de "já ganhou": a descrição carrega o marco,
- * então não precisa de campo extra no schema para evitar duplicata.
+ * Concede o bônus de um marco de streak, uma vez só.
+ *
+ * A unicidade é do banco (`@@unique([milestoneDays])`), não de uma consulta
+ * antes de gravar: o findFirst+create anterior tinha corrida, e usava a string
+ * da descrição como chave — bastava renomear "Streak de 7 dias" para todos os
+ * bônus históricos serem concedidos de novo.
  */
 export async function awardStreakMilestone(days: number, amount: number, db: XpDb = prisma) {
-  const description = `Streak de ${days} dias`;
-
-  const already = await db.xpEvent.findFirst({
-    where: { source: "STREAK", description },
+  const existing = await db.xpEvent.findUnique({
+    where: { milestoneDays: days },
     select: { id: true },
   });
 
-  if (already) return null;
+  if (existing) return null;
 
-  return recordXp({ source: "STREAK", amount, description }, db);
+  try {
+    return await recordXp(
+      {
+        source: "STREAK",
+        amount,
+        description: `Streak de ${days} dias`,
+        milestoneDays: days,
+      },
+      db,
+    );
+  } catch {
+    // Corrida perdida: outro pedido gravou o mesmo marco entre a checagem e o
+    // insert. O bônus já está no ledger, que é o resultado desejado.
+    return null;
+  }
 }
 
 export async function getTotalXp() {

@@ -3,16 +3,14 @@ import { Card } from "@/components/ui/card";
 import { StudyTimer } from "@/components/timer/study-timer";
 import { HoursChart } from "@/components/timer/hours-chart";
 import { requireSession } from "@/lib/session";
+import { listSubjectsWithProgress } from "@/lib/queries/subjects";
 import { formatDate, formatMinutes } from "@/lib/format";
 
 export default async function TimerPage() {
   await requireSession();
 
   const [subjects, sessions] = await Promise.all([
-    prisma.subject.findMany({
-      orderBy: { name: "asc" },
-      include: { sessions: { select: { durationMinutes: true } } },
-    }),
+    listSubjectsWithProgress(),
     prisma.studySession.findMany({
       orderBy: { endedAt: "desc" },
       take: 10,
@@ -22,10 +20,7 @@ export default async function TimerPage() {
 
   const chartData = subjects.map((subject) => ({
     name: subject.code,
-    hours:
-      Math.round(
-        (subject.sessions.reduce((sum, s) => sum + s.durationMinutes, 0) / 60) * 10,
-      ) / 10,
+    hours: Math.round((subject.minutes / 60) * 10) / 10,
     color: subject.color,
   }));
 

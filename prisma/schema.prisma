@@ -150,8 +150,20 @@ model XpEvent {
   description String
   createdAt   DateTime @default(now())
 
-  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  // SetNull, não Cascade: apagar uma matéria antiga não pode apagar o esforço
+  // que ela custou. Com Cascade o total caía, o nível REGREDIA e o cérebro
+  // encolhia — um ledger que perde linhas não é um ledger. `getXpBySubject` já
+  // trazia o fallback "Matéria removida", que até agora era código morto.
+  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
   subjectId String?
+
+  /**
+   * Marco de streak (7, 30, 100...) que este evento concedeu.
+   * A idempotência do bônus dependia de casar a string da descrição, então
+   * renomear "Streak de 7 dias" reconcederia todos os bônus já dados. Agora a
+   * chave é o dado, com unicidade garantida pelo banco.
+   */
+  milestoneDays Int?
 
   task   Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
   taskId String?
@@ -168,6 +180,7 @@ model XpEvent {
   // eventos de outras origens (sessão, streak) continuam livres.
   @@unique([taskId])
   @@unique([topicId])
+  @@unique([milestoneDays])
   @@index([createdAt])
   @@index([subjectId])
 }

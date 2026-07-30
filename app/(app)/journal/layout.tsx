@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { prisma } from "@/lib/db";
 import { buttonClasses } from "@/components/ui/button";
 import { requireSession } from "@/lib/session";
+import { listJournalPosts } from "@/lib/queries/journal";
 import { formatDate } from "@/lib/format";
 
 export default async function JournalLayout({
@@ -11,10 +11,7 @@ export default async function JournalLayout({
 }) {
   await requireSession();
 
-  const posts = await prisma.journalPost.findMany({
-    orderBy: { publishedAt: "desc" },
-    include: { subject: { select: { name: true, color: true } } },
-  });
+  const posts = await listJournalPosts();
 
   return (
     <div className="flex flex-col gap-8 lg:flex-row">

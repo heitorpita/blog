@@ -138,6 +138,12 @@ export async function getStudyHeatmap(weeks = 26): Promise<HeatmapDay[]> {
   return result;
 }
 
+/**
+ * XP por matéria. Eventos cuja matéria foi apagada ficam com `subjectId` nulo
+ * (ON DELETE SET NULL) e saem deste recorte — continuam somando no total e no
+ * nível, só não têm mais a quem ser atribuídos. O fallback de nome cobre a
+ * corrida de a matéria sumir entre as duas consultas abaixo.
+ */
 export async function getXpBySubject(): Promise<SubjectXp[]> {
   const [grouped, subjects] = await Promise.all([
     prisma.xpEvent.groupBy({

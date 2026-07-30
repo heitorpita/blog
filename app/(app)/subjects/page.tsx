@@ -1,21 +1,15 @@
 import Link from "next/link";
-import { prisma } from "@/lib/db";
 import { Card } from "@/components/ui/card";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { SubjectCreator } from "@/components/subjects/subject-creator";
 import { requireSession } from "@/lib/session";
+import { listSubjectsWithProgress } from "@/lib/queries/subjects";
 import { formatMinutes } from "@/lib/format";
 
 export default async function SubjectsPage() {
   await requireSession();
 
-  const subjects = await prisma.subject.findMany({
-    orderBy: { name: "asc" },
-    include: {
-      topics: { select: { completed: true } },
-      sessions: { select: { durationMinutes: true } },
-    },
-  });
+  const subjects = await listSubjectsWithProgress();
 
   return (
     <div className="space-y-6">
@@ -35,10 +29,6 @@ export default async function SubjectsPage() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         {subjects.map((subject) => {
-          const total = subject.topics.length;
-          const done = subject.topics.filter((topic) => topic.completed).length;
-          const minutes = subject.sessions.reduce((sum, s) => sum + s.durationMinutes, 0);
-
           return (
             <Link key={subject.id} href={`/subjects/${subject.id}`}>
               <Card className="h-full transition-colors hover:border-accent/40">
@@ -61,14 +51,14 @@ export default async function SubjectsPage() {
 
                 <div className="mt-4 space-y-2">
                   <ProgressBar
-                    progress={total === 0 ? 0 : done / total}
+                    progress={subject.topicsTotal === 0 ? 0 : subject.topicsDone / subject.topicsTotal}
                     color={subject.color}
                   />
                   <div className="flex justify-between text-xs text-muted">
                     <span>
-                      {done}/{total} tópicos
+                      {subject.topicsDone}/{subject.topicsTotal} tópicos
                     </span>
-                    <span>{formatMinutes(minutes)} estudados</span>
+                    <span>{formatMinutes(subject.minutes)} estudados</span>
                   </div>
                 </div>
               </Card>
