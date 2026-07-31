@@ -5,7 +5,9 @@ import { XpChart } from "@/components/brain/xp-chart";
 import { StudyHeatmap } from "@/components/brain/study-heatmap";
 import { SubjectBreakdown } from "@/components/brain/subject-breakdown";
 import { EventFeed } from "@/components/brain/event-feed";
+import { StaleTopics } from "@/components/brain/stale-topics";
 import { requireSession } from "@/lib/session";
+import { getStaleTopics } from "@/lib/queries/subjects";
 import { getTotalXp } from "@/lib/xp-ledger";
 import {
   getRecentXpEvents,
@@ -20,7 +22,7 @@ import { formatMinutes } from "@/lib/format";
 export default async function BrainPage() {
   await requireSession();
 
-  const [totalXp, streak, xpOverTime, heatmap, bySubject, events, sessions] =
+  const [totalXp, streak, xpOverTime, heatmap, bySubject, events, sessions, stale] =
     await Promise.all([
       getTotalXp(),
       getStreak(),
@@ -32,6 +34,7 @@ export default async function BrainPage() {
         _sum: { durationMinutes: true },
         _count: true,
       }),
+      getStaleTopics(),
     ]);
 
   const { level, title, xp, xpIntoLevel, xpNeededForNext, progress, percent } =
@@ -120,6 +123,16 @@ export default async function BrainPage() {
         <h2 className="font-serif text-lg text-foreground">De onde veio o XP</h2>
         <div className="mt-4">
           <SubjectBreakdown data={bySubject} />
+        </div>
+      </Card>
+
+      <Card>
+        <h2 className="font-serif text-lg text-foreground">Parados há mais tempo</h2>
+        <p className="mt-1 text-xs text-muted">
+          Tópicos pendentes ordenados pelo que está há mais tempo sem receber estudo
+        </p>
+        <div className="mt-2">
+          <StaleTopics topics={stale} />
         </div>
       </Card>
 

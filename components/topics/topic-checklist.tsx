@@ -1,17 +1,20 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { fetchJson, jsonBody } from "@/lib/fetch-json";
+import { formatMinutes } from "@/lib/format";
 import { TOPIC_COMPLETION_XP } from "@/lib/xp";
 
 export type TopicItem = {
   id: string;
   title: string;
   completed: boolean;
+  /** Minutos de estudo lançados neste tópico. */
+  minutes: number;
 };
 
 export function TopicChecklist({
@@ -27,19 +30,27 @@ export function TopicChecklist({
   const { confirm, dialog } = useConfirm();
   const [isPending, startTransition] = useTransition();
   const [title, setTitle] = useState("");
+  const [colando, setColando] = useState(false);
   const [xpToast, setXpToast] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  // O checkbox responde na hora em vez de esperar o ida-e-volta com o servidor
+  // e o re-render da página inteira. Se a requisição falhar, o React desfaz
+  // sozinho ao terminar a transição — o estado volta a ser o do servidor.
+  const [optimistic, applyOptimistic] = useOptimistic(
+    topics,
+    (current: TopicItem[], change: { id: string; completed: boolean }) =>
+      current.map((topic) =>
+        topic.id === change.id ? { ...topic, completed: change.completed } : topic,
+      ),
+  );
 
   // Modo de seleção: enquanto ativo, o checkbox da esquerda seleciona em vez de
   // marcar como estudado. Dois checkboxes por linha confundiriam mais do que
   // ajudam — o texto riscado continua mostrando o que já foi estudado.
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-
-  function refresh() {
-    startTransition(() => router.refresh());
-  }
 
   function exitSelection() {
     setSelecting(false);
@@ -55,48 +66,67 @@ export function TopicChecklist({
     });
   }
 
-  const allSelected = topics.length > 0 && selected.size === topics.length;
+  const allSelected = optimistic.length > 0 && selected.size === optimistic.length;
 
-  async function toggle(topic: TopicItem) {
+  function toggle(topic: TopicItem) {
     setError(null);
-    setBusyId(topic.id);
-    const result = await fetchJson(
-      `/api/topics/${topic.id}`,
-      jsonBody("PATCH", { completed: !topic.completed }),
-    );
-    setBusyId(null);
 
-    if (!result.ok) {
-      setError(result.message);
-      return;
-    }
+    startTransition(async () => {
+      applyOptimistic({ id: topic.id, completed: !topic.completed });
 
-    // Só comemora depois que o servidor confirmou que o XP entrou.
-    if (!topic.completed) {
-      setXpToast(TOPIC_COMPLETION_XP);
-      setTimeout(() => setXpToast(null), 1800);
-    }
+      const result = await fetchJson(
+        `/api/topics/${topic.id}`,
+        jsonBody("PATCH", { completed: !topic.completed }),
+      );
 
-    refresh();
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+
+      if (!topic.completed) {
+        setXpToast(TOPIC_COMPLETION_XP);
+        setTimeout(() => setXpToast(null), 1800);
+      }
+
+      router.refresh();
+    });
   }
 
-  async function addTopic(event: React.FormEvent) {
+  async function addTopics(event: React.FormEvent) {
     event.preventDefault();
-    if (!title.trim()) return;
+
+    // Colar a ementa inteira: uma linha por tópico, vazias descartadas.
+    const titles = title
+      .split("\n")
+      .map((linha) => linha.trim())
+      .filter(Boolean);
+
+    if (titles.length === 0) return;
 
     setError(null);
-    const result = await fetchJson(
+    const result = await fetchJson<{ created: number; skipped: number }>(
       `/api/subjects/${subjectId}/topics`,
-      jsonBody("POST", { title }),
+      jsonBody("POST", { titles }),
     );
 
     if (!result.ok) {
       setError(result.message);
       return;
+    }
+
+    if (result.data.created === 0) {
+      setError("Esses tópicos já estão na ementa.");
+      return;
+    }
+
+    if (result.data.skipped > 0) {
+      setError(`${result.data.created} adicionados · ${result.data.skipped} já existiam.`);
     }
 
     setTitle("");
-    refresh();
+    setColando(false);
+    startTransition(() => router.refresh());
   }
 
   async function removeTopic(topic: TopicItem) {
@@ -121,11 +151,11 @@ export function TopicChecklist({
       return;
     }
 
-    refresh();
+    startTransition(() => router.refresh());
   }
 
   async function removeSelected() {
-    const alvos = topics.filter((topic) => selected.has(topic.id));
+    const alvos = optimistic.filter((topic) => selected.has(topic.id));
     if (alvos.length === 0) return;
 
     const estudados = alvos.filter((topic) => topic.completed).length;
@@ -158,7 +188,7 @@ export function TopicChecklist({
     }
 
     exitSelection();
-    refresh();
+    startTransition(() => router.refresh());
   }
 
   return (
@@ -175,7 +205,7 @@ export function TopicChecklist({
             </span>
           )}
 
-          {topics.length > 0 &&
+          {optimistic.length > 0 &&
             (selecting ? (
               <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={exitSelection}>
                 Cancelar
@@ -199,7 +229,7 @@ export function TopicChecklist({
               type="checkbox"
               checked={allSelected}
               onChange={() =>
-                setSelected(allSelected ? new Set() : new Set(topics.map((t) => t.id)))
+                setSelected(allSelected ? new Set() : new Set(optimistic.map((t) => t.id)))
               }
               className="size-4 accent-accent"
             />
@@ -208,7 +238,7 @@ export function TopicChecklist({
 
           <div className="flex items-center gap-3">
             <span className="text-xs text-muted">
-              {selected.size} de {topics.length}
+              {selected.size} de {optimistic.length}
             </span>
             <Button
               variant="danger"
@@ -223,13 +253,13 @@ export function TopicChecklist({
       )}
 
       <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
-        {topics.length === 0 && (
+        {optimistic.length === 0 && (
           <li className="px-4 py-6 text-center text-sm text-muted">
-            Nenhum tópico ainda. Adicione os itens da ementa abaixo.
+            Nenhum tópico ainda. Cole a ementa abaixo, uma linha por tópico.
           </li>
         )}
 
-        {topics.map((topic) => (
+        {optimistic.map((topic) => (
           <li
             key={topic.id}
             className={clsx(
@@ -249,7 +279,6 @@ export function TopicChecklist({
               <button
                 type="button"
                 onClick={() => toggle(topic)}
-                disabled={busyId === topic.id}
                 aria-pressed={topic.completed}
                 aria-label={`Marcar "${topic.title}" como estudado`}
                 className={clsx(
@@ -282,6 +311,14 @@ export function TopicChecklist({
               {topic.title}
             </span>
 
+            {/* Onde o tempo foi parar dentro da ementa. Só aparece quando há o
+                que mostrar, para não encher a lista de "0min". */}
+            {topic.minutes > 0 && (
+              <span className="shrink-0 text-xs tabular-nums text-muted">
+                {formatMinutes(topic.minutes)}
+              </span>
+            )}
+
             {/* Sempre visível e com alvo de toque de verdade. Antes era
                 `opacity-0 group-hover:opacity-100` com ~10px: no celular, onde
                 não existe hover, o botão simplesmente não aparecia. */}
@@ -306,16 +343,37 @@ export function TopicChecklist({
         </p>
       )}
 
-      <form onSubmit={addTopic} className="flex gap-2">
-        <input
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder="Adicionar tópico"
-          className="min-w-0 flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted focus:border-accent"
-        />
-        <Button type="submit" variant="secondary" disabled={isPending || !title.trim()}>
-          Adicionar tópico
-        </Button>
+      <form onSubmit={addTopics} className="space-y-2">
+        {colando ? (
+          <textarea
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            rows={6}
+            autoFocus
+            placeholder={"Cole a ementa aqui, uma linha por tópico:\n\nLimites\nDerivadas\nIntegrais"}
+            className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted focus:border-accent"
+          />
+        ) : (
+          <input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="Adicionar tópico"
+            className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted focus:border-accent"
+          />
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" variant="secondary" disabled={isPending || !title.trim()}>
+            {colando ? "Adicionar tópicos" : "Adicionar tópico"}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setColando((valor) => !valor)}
+          >
+            {colando ? "Adicionar um por vez" : "Colar ementa inteira"}
+          </Button>
+        </div>
       </form>
     </section>
   );

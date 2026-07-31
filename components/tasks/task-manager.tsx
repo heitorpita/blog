@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,16 @@ export function TaskManager({
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  // O status vira na hora em vez de esperar o servidor e o re-render da página.
+  // Falhando, o React desfaz sozinho ao fim da transição.
+  const [optimistic, applyOptimistic] = useOptimistic(
+    tasks,
+    (current: TaskItem[], change: { id: string; status: TaskItem["status"] }) =>
+      current.map((task) =>
+        task.id === change.id ? { ...task, status: change.status } : task,
+      ),
+  );
+
   function refresh() {
     startTransition(() => router.refresh());
   }
@@ -65,31 +75,34 @@ export function TaskManager({
     refresh();
   }
 
-  async function cycleStatus(task: TaskItem) {
+  function cycleStatus(task: TaskItem) {
     const nextIndex = (STATUS_ORDER.indexOf(task.status) + 1) % STATUS_ORDER.length;
     const nextStatus = STATUS_ORDER[nextIndex];
 
     setError(null);
-    setBusyId(task.id);
-    const result = await fetchJson(
-      `/api/tasks/${task.id}`,
-      jsonBody("PATCH", { status: nextStatus }),
-    );
-    setBusyId(null);
 
-    if (!result.ok) {
-      setError(result.message);
-      return;
-    }
+    startTransition(async () => {
+      applyOptimistic({ id: task.id, status: nextStatus });
 
-    // O toast só aparece depois do servidor confirmar. Antes ele comemorava XP
-    // que podia nunca ter sido gravado.
-    if (nextStatus === "DONE") {
-      setXpToast(task.xp);
-      setTimeout(() => setXpToast(null), 1800);
-    }
+      const result = await fetchJson(
+        `/api/tasks/${task.id}`,
+        jsonBody("PATCH", { status: nextStatus }),
+      );
 
-    refresh();
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+
+      // O toast só aparece depois do servidor confirmar. Antes ele comemorava XP
+      // que podia nunca ter sido gravado.
+      if (nextStatus === "DONE") {
+        setXpToast(task.xp);
+        setTimeout(() => setXpToast(null), 1800);
+      }
+
+      router.refresh();
+    });
   }
 
   async function removeTask(task: TaskItem) {
@@ -194,13 +207,13 @@ export function TaskManager({
       )}
 
       <ul className="space-y-2">
-        {tasks.length === 0 && (
+        {optimistic.length === 0 && (
           <li className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted">
             Nenhuma tarefa ainda.
           </li>
         )}
 
-        {tasks.map((task) => (
+        {optimistic.map((task) => (
           <li
             key={task.id}
             className={clsx(
