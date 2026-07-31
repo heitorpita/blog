@@ -251,6 +251,16 @@ depois exigiria duas migrations. `CharacterState` é removido: `totalXp` passa a
   tela); hoje são "Adicionar tópico" e "Adicionar tarefa".
 - **Datas: sempre use `lib/time.ts`**, nunca `toISOString().slice(0,10)` — este último usa UTC e
   erra o dia para quem estuda à noite. Coberto por `test/time.test.ts`.
+- **Confirmação destrutiva usa `useConfirm()` (`components/ui/confirm-dialog.tsx`), nunca
+  `window.confirm`.** O nativo é suprimido pelo navegador depois de dois diálogos seguidos e passa
+  a devolver `false` calado — a ação simplesmente para de funcionar sem nenhum sinal na tela.
+- **Botão de ação em lista não pode depender de `hover` para aparecer.** `opacity-0` +
+  `group-hover:opacity-100` deixa o botão inalcançável no celular, que foi exatamente o bug de
+  "não consigo apagar os tópicos". Alvo mínimo de 32px.
+- **`endedAt` é o que define o dia** no streak, no heatmap e na curva de XP. Ao criar sessão com
+  `startedAt` explícito (lançamento retroativo), o fim é calculado a partir dele — nunca `now`.
+- **Mudar a duração de uma sessão obriga a corrigir o `XpEvent` na mesma transação**
+  (`app/api/sessions/[id]/route.ts`), senão o ledger fica com o XP antigo para sempre.
 - **Toda mutação no cliente passa por `lib/fetch-json.ts`.** Ele nunca lança, devolve resultado
   tipado e manda para `/login` no 401. `fetch` solto engolia erro de rede dentro do handler de
   evento. Exceção: `components/auth/login-form.tsx`, onde o redirect no 401 viraria laço.

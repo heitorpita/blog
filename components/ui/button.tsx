@@ -1,7 +1,7 @@
 import { ButtonHTMLAttributes } from "react";
 import clsx from "clsx";
 
-type ButtonVariant = "primary" | "secondary" | "ghost";
+type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
@@ -21,6 +21,8 @@ export function buttonClasses(variant: ButtonVariant = "primary", className?: st
     variant === "secondary" &&
       "border border-border bg-surface-raised text-foreground hover:border-accent/50",
     variant === "ghost" && "text-muted hover:bg-surface-raised hover:text-foreground",
+    // Ação destrutiva. Antes cada tela montava a sua com classes soltas inline.
+    variant === "danger" && "bg-rose-500 text-white hover:bg-rose-400",
     className,
   );
 }

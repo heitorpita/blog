@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { comparePace, type Pace } from "@/lib/pace";
 
 // Somas de tempo estudado feitas no Postgres, não em JavaScript. As páginas
 // carregavam TODAS as linhas de StudySession só para somar `durationMinutes` —
@@ -34,4 +35,34 @@ export async function getStudyMinutesInLastDays(days: number): Promise<number> {
   });
 
   return _sum.durationMinutes ?? 0;
+}
+
+/**
+ * Ritmo: últimos 7 dias contra os 7 anteriores.
+ *
+ * Janela deslizante, não semana civil, para casar com o texto que o card do
+ * dashboard já usa ("Últimos 7 dias") — e porque a pergunta real é "estou
+ * estudando menos do que vinha estudando", que não espera domingo para valer.
+ */
+export async function getWeeklyPace(): Promise<Pace> {
+  const agora = Date.now();
+  const DIA = 24 * 60 * 60 * 1000;
+  const inicioAtual = new Date(agora - 7 * DIA);
+  const inicioAnterior = new Date(agora - 14 * DIA);
+
+  const [atual, anterior] = await Promise.all([
+    prisma.studySession.aggregate({
+      where: { endedAt: { gte: inicioAtual } },
+      _sum: { durationMinutes: true },
+    }),
+    prisma.studySession.aggregate({
+      where: { endedAt: { gte: inicioAnterior, lt: inicioAtual } },
+      _sum: { durationMinutes: true },
+    }),
+  ]);
+
+  return comparePace(
+    atual._sum.durationMinutes ?? 0,
+    anterior._sum.durationMinutes ?? 0,
+  );
 }

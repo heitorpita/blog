@@ -61,6 +61,7 @@ model Topic {
   subjectId String
 
   tasks    Task[]
+  sessions StudySession[]
   xpEvents XpEvent[]
 
   @@index([subjectId])
@@ -97,12 +98,21 @@ model StudySession {
   xpEarned        Int
   createdAt       DateTime    @default(now())
 
+  /// O que foi estudado nessa sessão. Sem isto, sessão é um bloco anônimo de tempo.
+  note String?
+
   subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   subjectId String
+
+  // SetNull, não Cascade: apagar um tópico da ementa não pode apagar as horas
+  // que você gastou nele. Mesma regra já adotada em XpEvent.subjectId.
+  topic   Topic?  @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  topicId String?
 
   xpEvents XpEvent[]
 
   @@index([subjectId])
+  @@index([topicId])
   @@index([endedAt])
 }
 

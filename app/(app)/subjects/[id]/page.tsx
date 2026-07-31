@@ -5,6 +5,7 @@ import { TopicChecklist } from "@/components/topics/topic-checklist";
 import { SubjectSettings } from "@/components/subjects/subject-settings";
 import { requireSession } from "@/lib/session";
 import { getSubjectDetail } from "@/lib/queries/subjects";
+import { hoursGoal } from "@/lib/goal";
 import { formatMinutes } from "@/lib/format";
 
 export default async function SubjectPage({ params }: PageProps<"/subjects/[id]">) {
@@ -14,6 +15,8 @@ export default async function SubjectPage({ params }: PageProps<"/subjects/[id]"
   const subject = await getSubjectDetail(id);
 
   if (!subject) notFound();
+
+  const meta = hoursGoal(subject.minutes, subject.hours);
 
   return (
     <div className="space-y-8">
@@ -56,6 +59,22 @@ export default async function SubjectPage({ params }: PageProps<"/subjects/[id]"
           </span>
           <span>{formatMinutes(subject.minutes)} estudados</span>
         </div>
+
+        {/* A carga horária estava no banco desde o começo e só era exibida como
+            texto. É a única meta que o app já tinha e não usava. */}
+        {meta.target > 0 && (
+          <div className="space-y-1.5 pt-2">
+            <ProgressBar progress={meta.progress} />
+            <div className="flex justify-between text-xs text-muted">
+              <span>
+                {meta.done}h de {meta.target}h da carga horária
+              </span>
+              <span className={meta.reached ? "text-emerald-400" : undefined}>
+                {meta.reached ? "meta batida" : `faltam ${meta.remaining}h`}
+              </span>
+            </div>
+          </div>
+        )}
       </header>
 
       <TopicChecklist

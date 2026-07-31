@@ -4,6 +4,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { SubjectCreator } from "@/components/subjects/subject-creator";
 import { requireSession } from "@/lib/session";
 import { listSubjectsWithProgress } from "@/lib/queries/subjects";
+import { hoursGoal } from "@/lib/goal";
 import { formatMinutes } from "@/lib/format";
 
 export default async function SubjectsPage() {
@@ -29,6 +30,8 @@ export default async function SubjectsPage() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         {subjects.map((subject) => {
+          const meta = hoursGoal(subject.minutes, subject.hours);
+
           return (
             <Link key={subject.id} href={`/subjects/${subject.id}`}>
               <Card className="h-full transition-colors hover:border-accent/40">
@@ -58,7 +61,11 @@ export default async function SubjectsPage() {
                     <span>
                       {subject.topicsDone}/{subject.topicsTotal} tópicos
                     </span>
-                    <span>{formatMinutes(subject.minutes)} estudados</span>
+                    <span>
+                      {meta.target > 0
+                        ? `${meta.done}h de ${meta.target}h`
+                        : `${formatMinutes(subject.minutes)} estudados`}
+                    </span>
                   </div>
                 </div>
               </Card>

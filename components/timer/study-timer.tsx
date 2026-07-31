@@ -21,7 +21,12 @@ import {
   subscribeToTimer,
 } from "@/components/timer/timer-store";
 
-type SubjectOption = { id: string; name: string; color: string };
+type SubjectOption = {
+  id: string;
+  name: string;
+  color: string;
+  topics: { id: string; title: string }[];
+};
 
 function formatClock(seconds: number) {
   const safe = Math.max(seconds, 0);
@@ -72,6 +77,8 @@ export function StudyTimer({ subjects }: { subjects: SubjectOption[] }) {
       ? state.subjectId
       : (subjects[0]?.id ?? "");
 
+  const topics = subjects.find((subject) => subject.id === subjectId)?.topics ?? [];
+
   const elapsed = elapsedSeconds(state, now);
   const phaseLength = phaseSeconds(state);
   const running = state.startedAt !== null;
@@ -110,8 +117,10 @@ export function StudyTimer({ subjects }: { subjects: SubjectOption[] }) {
       "/api/sessions",
       jsonBody("POST", {
         subjectId,
+        topicId: state.topicId || null,
         mode: state.mode,
         durationMinutes: pendingMinutes,
+        note: state.note.trim() || null,
       }),
     );
     setSaving(false);
@@ -147,6 +156,22 @@ export function StudyTimer({ subjects }: { subjects: SubjectOption[] }) {
           {subjects.map((subject) => (
             <option key={subject.id} value={subject.id}>
               {subject.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={state.topicId}
+          onChange={(event) =>
+            setTimerState((current) => ({ ...current, topicId: event.target.value }))
+          }
+          aria-label="Tópico da ementa"
+          className="min-w-40 flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+        >
+          <option value="">Sem tópico</option>
+          {topics.map((topic) => (
+            <option key={topic.id} value={topic.id}>
+              {topic.title}
             </option>
           ))}
         </select>
@@ -222,6 +247,17 @@ export function StudyTimer({ subjects }: { subjects: SubjectOption[] }) {
           {pendingMinutes} min acumulados · vale {pendingMinutes * XP_PER_MINUTE_STUDIED} XP
         </p>
       </div>
+
+      <input
+        value={state.note}
+        onChange={(event) =>
+          setTimerState((current) => ({ ...current, note: event.target.value }))
+        }
+        placeholder="O que você está estudando? (opcional)"
+        maxLength={500}
+        aria-label="Anotação da sessão"
+        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted focus:border-accent"
+      />
 
       <div className="flex flex-wrap justify-center gap-3">
         <Button onClick={toggleRunning}>{running ? "Pausar" : "Iniciar"}</Button>

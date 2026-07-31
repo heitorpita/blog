@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { fetchJson, jsonBody } from "@/lib/fetch-json";
 
 // A API já tinha PATCH e DELETE de matéria desde sempre; faltava o botão. Sem
@@ -19,6 +20,7 @@ export type SubjectSettingsProps = {
 
 export function SubjectSettings({ subject, counts }: SubjectSettingsProps) {
   const router = useRouter();
+  const { confirm, dialog } = useConfirm();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(subject.name);
   const [code, setCode] = useState(subject.code);
@@ -69,15 +71,17 @@ export function SubjectSettings({ subject, counts }: SubjectSettingsProps) {
       `${counts.sessions} sessão${counts.sessions === 1 ? "" : "ões"} de estudo`,
     ].join(", ");
 
-    if (
-      !window.confirm(
-        `Excluir "${subject.name}"?\n\nIsso apaga também: ${detalhes}.\n` +
-          `Cerca de ${counts.xp} XP ligados a essa matéria vão embora junto.\n\n` +
-          `Não dá para desfazer.`,
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: `Excluir "${subject.name}"?`,
+      description:
+        `Isso apaga também: ${detalhes}.\n` +
+        `Os ${counts.xp} XP dessas origens vão embora junto.\n\n` +
+        `Não dá para desfazer.`,
+      confirmLabel: "Excluir matéria",
+      tone: "danger",
+    });
+
+    if (!ok) return;
 
     setSaving(true);
     setError(null);
@@ -96,14 +100,18 @@ export function SubjectSettings({ subject, counts }: SubjectSettingsProps) {
 
   if (!open) {
     return (
-      <Button variant="secondary" onClick={() => setOpen(true)}>
-        Editar matéria
-      </Button>
+      <>
+        {dialog}
+        <Button variant="secondary" onClick={() => setOpen(true)}>
+          Editar matéria
+        </Button>
+      </>
     );
   }
 
   return (
     <Card className="w-full space-y-4">
+      {dialog}
       <h2 className="font-serif text-lg text-foreground">Editar matéria</h2>
 
       <form onSubmit={save} className="space-y-3">
